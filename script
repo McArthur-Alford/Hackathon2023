@@ -1,18 +1,17 @@
-__init__:
-    box1
-    box2
-    box3
+init:
+    TIME ^init True
+    ->
     box1 ^on box2
     box2 ^left_of box3
     box3 ^colour 'red'
     box3 ^magical 'magical'
+    box4 ^* *
 
 test_rule:
     <x> ^on <y>
     <y> ^left_of <z>
-    <z> ^magical
+    <z> ^magical *
     <z> ^colour 'red'
     ->
     <z> ^colour 'blue'
     IO ^print 'The box has colour'
-    IO ^print (<z> ^colour)

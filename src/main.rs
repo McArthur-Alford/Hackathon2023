@@ -6,6 +6,8 @@ use std::fs;
 #[grammar = "grammar.pest"]
 pub struct CSVParser;
 
+struct rule {}
+
 fn main() {
     let unparsed_file = fs::read_to_string("script").expect("cannot read file");
 
