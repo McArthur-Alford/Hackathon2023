@@ -1,0 +1,64 @@
+// field = { (ASCII_DIGIT | "." | "-")+ }
+// record = { field ~ ("," ~ field)* }
+// file = { SOI ~ (record ~ ("\r\n" | "\n"))* ~ EOI }
+
+alpha = { 'a'..'z' | 'A'..'Z' }
+digit = { '0'..'9' }
+whitespace = _{ " " | "\t" }
+
+char = { ASCII_ALPHA | whitespace | ":" | "!" | "." }
+string = {"'" ~ char+ ~ "'"}
+
+ident = { (alpha | "_") ~ (alpha | digit | "_")* }
+generic = { "<" ~ ident ~ ">" }
+var = { ident | generic }
+attr = { "^" ~ ident }
+const = { string | digit+ }
+expr = { var | const | "(" ~ access ~ ")" }
+
+access = {
+	whitespace*
+	~ var
+	~ (
+		whitespace*
+		~ attr
+	)?
+}
+
+prod = { 
+	whitespace*
+	~ var 
+	~ (
+		whitespace*
+		~ attr 
+		~ (
+			whitespace*
+			~ expr
+		)?
+	)?
+}
+
+block = {
+	prod
+	~ (NEWLINE ~ prod)*
+}
+
+rule = { 
+	ident
+	~ ":"
+	~ NEWLINE?
+	~ block
+	~ (
+		NEWLINE?
+		~ whitespace*
+		~ "->"
+		~ NEWLINE?
+		~ block	
+	)?
+}
+
+file = { 
+	SOI 
+	~ ( (NEWLINE | whitespace)* ~ rule ~ (NEWLINE | whitespace)* )*
+	~ EOI
+}
