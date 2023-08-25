@@ -29,6 +29,8 @@ struct Prod {
     rhs: Vec<WME>,
 }
 
+struct Engine {}
+
 fn main() {
     let unparsed_file = fs::read_to_string("script").expect("cannot read file");
 

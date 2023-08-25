@@ -4,7 +4,8 @@ digit = _{ '0'..'9' }
 false = { "False" }
 true = { "True" }
 bool = { false | true }
-whitespace = _{ " " | "\t" }
+comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+whitespace = _{ comment | " " | "\t" }
 char = _{ ASCII_ALPHA | digit | whitespace | ":" | "!" | "." }
 string = _{"'" ~ char+ ~ "'"}
 number = _{ digit+ }
@@ -23,7 +24,7 @@ attr = { "^" ~ ident }
 const = { string | digit+ | bool }
 
 // Expressions used in RHS of WME
-expr = { var | const | bool | "(" ~ wme ~ ")" }
+expr = { var | const | bool }
 
 // Working Memory Element:
 wme = { 
@@ -40,8 +41,8 @@ wme = {
 }
 
 block = {
-	wme
-	~ (NEWLINE ~ wme)*
+	(wme | whitespace+)
+	~ (NEWLINE* ~ ((wme ~ whitespace*) | whitespace+))*
 }
 
 // Productions:
@@ -57,6 +58,7 @@ prod = {
 		~ NEWLINE?
 		~ block	
 	)?
+	~ whitespace*
 }
 
 // Entire Program:
