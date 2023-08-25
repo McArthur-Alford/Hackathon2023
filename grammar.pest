@@ -1,22 +1,29 @@
-// field = { (ASCII_DIGIT | "." | "-")+ }
-// record = { field ~ ("," ~ field)* }
-// file = { SOI ~ (record ~ ("\r\n" | "\n"))* ~ EOI }
-
-alpha = { 'a'..'z' | 'A'..'Z' }
-digit = { '0'..'9' }
+// Building Blocks:
+alpha = _{ 'a'..'z' | 'A'..'Z' }
+digit = _{ '0'..'9' }
 whitespace = _{ " " | "\t" }
+char = _{ ASCII_ALPHA | whitespace | ":" | "!" | "." }
+string = _{"'" ~ char+ ~ "'"}
+number = _{ digit+ }
 
-char = { ASCII_ALPHA | whitespace | ":" | "!" | "." }
-string = {"'" ~ char+ ~ "'"}
+// Constants and Identifiers:
+ident = _{ (alpha | "_") ~ (alpha | digit | "_")* }
+generic = _{ "<" ~ ident ~ ">" }
 
-ident = { (alpha | "_") ~ (alpha | digit | "_")* }
-generic = { "<" ~ ident ~ ">" }
+// Variable
 var = { ident | generic }
-attr = { "^" ~ ident }
-const = { string | digit+ }
-expr = { var | const }
 
-prod = { 
+// Attribute Handle
+attr = { "^" ~ ident }
+
+// Literal types
+const = { string | digit+ }
+
+// Expressions used in RHS of WME
+expr = { var | const | "(" ~ wme ~ ")" }
+
+// Working Memory Element:
+wme = { 
 	whitespace*
 	~ (var | "*")
 	~ (
@@ -30,11 +37,12 @@ prod = {
 }
 
 block = {
-	prod
-	~ (NEWLINE ~ prod)*
+	wme
+	~ (NEWLINE ~ wme)*
 }
 
-rule = { 
+// Productions:
+prod = { 
 	ident
 	~ ":"
 	~ NEWLINE?
@@ -48,8 +56,9 @@ rule = {
 	)?
 }
 
+// Entire Program:
 file = { 
 	SOI 
-	~ ( (NEWLINE | whitespace)* ~ rule ~ (NEWLINE | whitespace)* )*
+	~ ( (NEWLINE | whitespace)* ~ prod ~ (NEWLINE | whitespace)* )*
 	~ EOI
 }

@@ -1,4 +1,4 @@
-init:
+init_rule:
     TIME ^init True
     ->
     box1 ^on box2
