@@ -1,8 +1,11 @@
 // Building Blocks:
 alpha = _{ 'a'..'z' | 'A'..'Z' }
 digit = _{ '0'..'9' }
+false = { "False" }
+true = { "True" }
+bool = { false | true }
 whitespace = _{ " " | "\t" }
-char = _{ ASCII_ALPHA | whitespace | ":" | "!" | "." }
+char = _{ ASCII_ALPHA | digit | whitespace | ":" | "!" | "." }
 string = _{"'" ~ char+ ~ "'"}
 number = _{ digit+ }
 
@@ -11,16 +14,16 @@ ident = _{ (alpha | "_") ~ (alpha | digit | "_")* }
 generic = _{ "<" ~ ident ~ ">" }
 
 // Variable
-var = { ident | generic }
+var = { generic }
 
 // Attribute Handle
 attr = { "^" ~ ident }
 
 // Literal types
-const = { string | digit+ }
+const = { string | digit+ | bool }
 
 // Expressions used in RHS of WME
-expr = { var | const | "(" ~ wme ~ ")" }
+expr = { var | const | bool | "(" ~ wme ~ ")" }
 
 // Working Memory Element:
 wme = { 
