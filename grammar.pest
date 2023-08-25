@@ -7,24 +7,25 @@ bool = { false | true }
 comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 whitespace = _{ comment | " " | "\t" }
 char = _{ ASCII_ALPHA | digit | whitespace | ":" | "!" | "." }
-string = _{"'" ~ char+ ~ "'"}
-number = _{ digit+ }
+string = {"'" ~ char+ ~ "'"}
+number = { digit+ }
+wildcard = { "*" }
 
 // Constants and Identifiers:
-ident = _{ (alpha | "_") ~ (alpha | digit | "_")* }
-generic = _{ "<" ~ ident ~ ">" }
+ident = { (alpha | "_") ~ (alpha | digit | "_")* }
+generic = { "<" ~ ident ~ ">" }
 
 // Variable
-var = { generic }
+var = { generic | wildcard }
 
 // Attribute Handle
-attr = { "^" ~ ident }
+attr = { "^" ~ (ident | wildcard) }
 
 // Literal types
-const = { string | digit+ | bool }
+constant = { string | number | bool }
 
 // Expressions used in RHS of WME
-expr = { var | const | bool }
+expr = { var | constant | bool }
 
 // Working Memory Element:
 wme = { 

@@ -23,3 +23,12 @@ test_rule:
     /* We then print the colour of the middle box: */
     <IO> ^print 'The middle box has colour' 
     <IO> ^print <c>
+
+/* Prints all possible pairs of elements on something, and elements under something */
+test_rule_2:
+    <y> ^on *
+    * ^on <x>
+    <z> ^* 'red' /* Matches anything with any attribute equal to red, powerful! */
+    ->
+    <IO> ^print <y>
+    <IO> ^print <x>
