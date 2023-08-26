@@ -156,12 +156,22 @@ fn abstract_wme_into_symbols(aw: AbstractWME) -> (Option<String>, Option<String>
 
 impl Join {
     // Activates with a new element from the right
-    fn activate_right(&mut self, cw: ConcreteWME, aw: AbstractWME, mode: ActivationMode) {
+    fn activate_right(
+        &mut self,
+        cw: ConcreteWME,
+        aw: AbstractWME,
+        mode: ActivationMode,
+        tables_override: Option<Vec<JoinTable>>,
+    ) {
         let jte = concrete_wme_into_jte(cw);
         let syms = abstract_wme_into_symbols(aw);
         // We now have each value and symbol in the new entry (exhausting, right??)
 
-        let tables: Vec<JoinTable> = Rc::try_unwrap(self.left_parent.clone()).unwrap().memories;
+        let mut tables: Vec<JoinTable> = Rc::try_unwrap(self.left_parent.clone()).unwrap().memories;
+        if let Some(tables_override) = tables_override {
+            tables = tables_override;
+        }
+
         let new_tables = tables
             .iter()
             .filter(|table| {
@@ -208,7 +218,13 @@ impl Join {
     }
 
     // Activates with a new match from the left (cws is a list of NEW table matches)
-    fn activate_left(&mut self, cws: Vec<JoinTable>, mode: ActivationMode) {}
+    fn activate_left(&mut self, cws: Vec<JoinTable>, aw: AbstractWME, mode: ActivationMode) {
+        let right: HashSet<ConcreteWME> =
+            Rc::try_unwrap(self.right_parent.clone()).unwrap().memories;
+        for cw in right {
+            self.activate_right(cw, aw.clone(), mode, Some(cws.clone()))
+        }
+    }
 }
 
 impl BetaNode {
