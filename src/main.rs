@@ -267,6 +267,47 @@ impl BetaNode {
     }
 }
 
+// #[derive(Debug, Clone)]
+// struct BetaNode {
+//     memories: Vec<JoinTable>,
+//     downstream: Vec<Rc<RefCell<Join>>>,
+//     productions: Vec<Rc<RefCell<Production>>>,
+// }
+
+// #[derive(Debug, Clone)]
+// struct Join {
+//     test: Option<Vec<AbstractWME>>,
+//     right_test: AbstractWME,
+//     left_parent: Option<Rc<BetaNode>>,
+//     right_parent: Rc<AlphaMemory>,
+//     downstream: Vec<Rc<RefCell<BetaNode>>>, // A list of shared mutable references to all downstream nodes
+// }
+
+fn generate_betas(pattern: Vec<AbstractWME>, alphanet: ConstantTestNode) -> Rc<RefCell<BetaNode>> {
+    if pattern.len() > 1 {
+        let betanet = generate_betas(
+            pattern[0..pattern.len() - 1].iter().cloned().collect(),
+            alphanet,
+        );
+        betanet
+    } else {
+        let beta = Rc::new(RefCell::new(BetaNode {
+            memories: Vec::new(),
+            downstream: Vec::new(),
+            productions: Vec::new(),
+        }));
+        // Base Case, here we have a single pattern
+        let join = Join {
+            test: None,
+            right_test: pattern[0].clone(),
+            left_parent: None,
+            right_parent: alphanet.get_alpha(pattern[0].clone()).unwrap(),
+            downstream: vec![beta.clone()],
+        };
+        beta
+    }
+}
+
 impl Production {
     fn activate(&mut self) {}
 }
@@ -276,7 +317,7 @@ struct ConstantTestNode {
     // Test to perform on incoming ConcreteWMEs
     test: Option<AbstractWME>,
     // Downstream alpha memories
-    output_memory: Option<AlphaMemory>,
+    output_memory: Option<Rc<AlphaMemory>>,
     // Downstream constant tests
     children: Vec<Box<ConstantTestNode>>,
 }
@@ -377,7 +418,8 @@ impl ConstantTestNode {
             if pattern_match(cw.clone(), test) {
                 // CW matched this constant test node pattern
                 // Add it to any directly downstream alpha memory:
-                if let Some(output_memory) = &mut self.output_memory {
+                if let Some(output_memory) = Rc::get_mut(&mut self.output_memory.as_mut().unwrap())
+                {
                     output_memory.activate(cw.clone(), mode);
                 }
 
@@ -389,7 +431,7 @@ impl ConstantTestNode {
         } else {
             // CW matched this constant test node pattern
             // Add it to any directly downstream alpha memory:
-            if let Some(output_memory) = &mut self.output_memory {
+            if let Some(output_memory) = Rc::get_mut(&mut self.output_memory.as_mut().unwrap()) {
                 output_memory.activate(cw.clone(), mode);
             }
 
@@ -398,6 +440,23 @@ impl ConstantTestNode {
                 child.activate(cw.clone(), mode);
             }
         }
+    }
+
+    // Get a Rc<RefCell<>> to an alpha matching the given pattern
+    fn get_alpha(&self, pattern: AbstractWME) -> Option<Rc<AlphaMemory>> {
+        for child in &self.children {
+            if let Some(test) = &child.test {
+                let (a, b) = compare_aa(test.clone(), pattern.clone());
+                if a && b {
+                    // This is a direct hit, return its output memory
+                    return child.output_memory.clone();
+                } else if a {
+                    // Its one of the children, recurse!
+                    return child.get_alpha(pattern);
+                }
+            }
+        }
+        return None;
     }
 
     // This should only be run on root
@@ -432,10 +491,10 @@ impl ConstantTestNode {
                     if aw_value_is_var {
                         // We dont need to create a child, but we can verify this has a alpha memory
                         if matches!(child.output_memory, None) {
-                            child.output_memory = Some(AlphaMemory {
+                            child.output_memory = Some(Rc::new(AlphaMemory {
                                 memories: HashSet::new(),
                                 downstream: HashSet::new(),
-                            });
+                            }));
                         }
                         return;
                     }
@@ -468,10 +527,10 @@ impl ConstantTestNode {
                     }),
                 }),
                 output_memory: if aw_value_is_var {
-                    Some(AlphaMemory {
+                    Some(Rc::new(AlphaMemory {
                         memories: HashSet::new(),
                         downstream: HashSet::new(),
-                    })
+                    }))
                 } else {
                     None
                 },
@@ -503,10 +562,10 @@ impl ConstantTestNode {
                         })
                     },
                 }),
-                output_memory: Some(AlphaMemory {
+                output_memory: Some(Rc::new(AlphaMemory {
                     memories: HashSet::new(),
                     downstream: HashSet::new(),
-                }),
+                })),
                 children: Vec::new(),
             });
             self.children.push(child);
@@ -657,10 +716,10 @@ fn main() {
                 identifier: "_".to_string(),
             }),
         }),
-        output_memory: Some(AlphaMemory {
+        output_memory: Some(Rc::new(AlphaMemory {
             memories: HashSet::new(),
             downstream: HashSet::new(),
-        }),
+        })),
         children: vec![],
     };
 
