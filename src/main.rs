@@ -3,8 +3,10 @@ use pest::{
     Parser,
 };
 use pest_derive::Parser;
+use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::rc::{Rc, Weak};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
@@ -72,17 +74,64 @@ struct Production {
 #[derive(Debug)]
 struct AlphaMemory {
     memories: HashSet<ConcreteWME>,
-    productions: HashSet<Production>,
+    downstream: HashSet<Join>,
 }
 
 impl AlphaMemory {
-    fn activate(&mut self, cw: ConcreteWME) {
+    fn activate(&mut self, cw: ConcreteWME, mode: ActivationMode) {
         // Add the cw into this alpha memory
-        self.memories.insert(cw);
+        if mode == ActivationMode::Add {
+            self.memories.insert(cw);
+        } else {
+            self.memories.remove(&cw);
+        }
     }
 }
 
-struct WMEStore {}
+#[derive(Debug, Clone)]
+struct BetaNode {
+    memories: Vec<JoinTable>,
+    downstream: Vec<Rc<RefCell<Join>>>,
+    productions: Vec<Rc<RefCell<Production>>>,
+}
+
+#[derive(Debug, Clone)]
+struct Join {
+    test: Option<Vec<AbstractWME>>,
+    left_parent: Rc<BetaNode>,
+    right_parent: Rc<AlphaMemory>,
+    downstream: Vec<Rc<RefCell<BetaNode>>>, // A list of shared mutable references to all downstream nodes
+}
+
+#[derive(Debug, Clone)]
+struct JoinTable(HashMap<String, JoinTableEntry>);
+
+// Represents all possible values of any symbol in the join table
+#[derive(Debug, Clone)]
+enum JoinTableEntry {
+    Variable(Variable),
+    Literal(Literal),
+}
+
+fn concrete_wme_into_jte(cw: ConcreteWME) {}
+
+impl Join {
+    // Activates with a new element from the right
+    fn activate_right(&mut self, cw: ConcreteWME, mode: ActivationMode) {
+        let new_matches: Vec<ConcreteWME> = Vec::new();
+        // Join the cw with every left hand match
+        for left in Rc::try_unwrap(self.left_parent.clone()).unwrap().memories {
+            // Going through each memory in the left parent!
+        }
+    }
+
+    // Activates with a new match from the left
+    fn activate_left(&mut self, cws: Vec<ConcreteWME>, mode: ActivationMode) {}
+}
+
+impl BetaNode {
+    fn activate(&mut self, cws: Vec<ConcreteWME>, mode: ActivationMode) {}
+}
 
 #[derive(Debug)]
 struct ConstantTestNode {
@@ -178,31 +227,37 @@ fn compare_ac(wme1: AbstractWME, wme2: ConcreteWME) -> (bool, bool) {
     out
 }
 
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+enum ActivationMode {
+    Add,
+    Delete,
+}
+
 impl ConstantTestNode {
-    fn activate(&mut self, cw: ConcreteWME) {
+    fn activate(&mut self, cw: ConcreteWME, mode: ActivationMode) {
         if let Some(test) = self.test.clone() {
             if pattern_match(cw.clone(), test) {
                 // CW matched this constant test node pattern
                 // Add it to any directly downstream alpha memory:
                 if let Some(output_memory) = &mut self.output_memory {
-                    output_memory.activate(cw.clone());
+                    output_memory.activate(cw.clone(), mode);
                 }
 
                 // Trigger all downstream concrete tests:
                 for child in &mut self.children {
-                    child.activate(cw.clone());
+                    child.activate(cw.clone(), mode);
                 }
             }
         } else {
             // CW matched this constant test node pattern
             // Add it to any directly downstream alpha memory:
             if let Some(output_memory) = &mut self.output_memory {
-                output_memory.activate(cw.clone());
+                output_memory.activate(cw.clone(), mode);
             }
 
             // Trigger all downstream concrete tests:
             for child in &mut self.children {
-                child.activate(cw.clone());
+                child.activate(cw.clone(), mode);
             }
         }
     }
@@ -241,7 +296,7 @@ impl ConstantTestNode {
                         if matches!(child.output_memory, None) {
                             child.output_memory = Some(AlphaMemory {
                                 memories: HashSet::new(),
-                                productions: HashSet::new(),
+                                downstream: HashSet::new(),
                             });
                         }
                         return;
@@ -277,7 +332,7 @@ impl ConstantTestNode {
                 output_memory: if aw_value_is_var {
                     Some(AlphaMemory {
                         memories: HashSet::new(),
-                        productions: HashSet::new(),
+                        downstream: HashSet::new(),
                     })
                 } else {
                     None
@@ -312,7 +367,7 @@ impl ConstantTestNode {
                 }),
                 output_memory: Some(AlphaMemory {
                     memories: HashSet::new(),
-                    productions: HashSet::new(),
+                    downstream: HashSet::new(),
                 }),
                 children: Vec::new(),
             });
@@ -466,7 +521,7 @@ fn main() {
         }),
         output_memory: Some(AlphaMemory {
             memories: HashSet::new(),
-            productions: HashSet::new(),
+            downstream: HashSet::new(),
         }),
         children: vec![],
     };
@@ -498,7 +553,7 @@ mod tests {
             }),
             output_memory: Some(AlphaMemory {
                 memories: HashSet::new(),
-                productions: HashSet::new(),
+                downstream: HashSet::new(),
             }),
             children: vec![],
         };
@@ -556,9 +611,9 @@ mod tests {
             value: ConcreteValue::Literal(Literal::Number(2)),
         };
 
-        root.activate(test_wme1);
-        root.activate(test_wme2);
-        root.activate(test_wme3);
+        root.activate(test_wme1.clone(), ActivationMode::Add);
+        root.activate(test_wme2.clone(), ActivationMode::Add);
+        root.activate(test_wme3.clone(), ActivationMode::Add);
 
         dbg!(&root);
     }
@@ -577,7 +632,7 @@ mod tests {
             }),
             output_memory: Some(AlphaMemory {
                 memories: HashSet::new(),
-                productions: HashSet::new(),
+                downstream: HashSet::new(),
             }),
             children: Vec::new(),
         };
@@ -593,7 +648,7 @@ mod tests {
             }),
             output_memory: Some(AlphaMemory {
                 memories: HashSet::new(),
-                productions: HashSet::new(),
+                downstream: HashSet::new(),
             }),
             children: vec![Box::new(child)],
         };
@@ -611,7 +666,7 @@ mod tests {
             }),
             output_memory: Some(AlphaMemory {
                 memories: HashSet::new(),
-                productions: HashSet::new(),
+                downstream: HashSet::new(),
             }),
             children: vec![Box::new(child)],
         };
@@ -635,10 +690,73 @@ mod tests {
 
         dbg!(&test_wme);
 
-        root.activate(test_wme);
-        root.activate(test_wme2);
-        root.activate(test_wme3);
+        root.activate(test_wme, ActivationMode::Add);
+        root.activate(test_wme2, ActivationMode::Add);
+        root.activate(test_wme3, ActivationMode::Add);
 
+        dbg!(&root);
+    }
+
+    #[test]
+    fn test_simple_remove() {
+        let mut root = ConstantTestNode {
+            test: Some(AbstractWME {
+                ident: Variable {
+                    identifier: "_".to_string(),
+                },
+                attr: AbstractAttribute::Variable(Variable {
+                    identifier: "_".to_string(),
+                }),
+                value: AbstractValue::Variable(Variable {
+                    identifier: "_".to_string(),
+                }),
+            }),
+            output_memory: Some(AlphaMemory {
+                memories: HashSet::new(),
+                downstream: HashSet::new(),
+            }),
+            children: vec![],
+        };
+        root.add_awme(AbstractWME {
+            ident: Variable {
+                identifier: "x".to_string(),
+            },
+            attr: AbstractAttribute::Literal("yeet".to_string()),
+            value: AbstractValue::Literal(Literal::Number(1)),
+        });
+        root.add_awme(AbstractWME {
+            ident: Variable {
+                identifier: "x".to_string(),
+            },
+            attr: AbstractAttribute::Literal("yote".to_string()),
+            value: AbstractValue::Literal(Literal::Number(2)),
+        });
+        root.add_awme(AbstractWME {
+            ident: Variable {
+                identifier: "x".to_string(),
+            },
+            attr: AbstractAttribute::Literal("yeet".to_string()),
+            value: AbstractValue::Variable(Variable {
+                identifier: "z".to_string(),
+            }),
+        });
+
+        let test_wme1 = ConcreteWME {
+            ident: EntityId(0),
+            attr: "yeet".to_string(),
+            value: ConcreteValue::Literal(Literal::Number(1)),
+        };
+        let test_wme2 = ConcreteWME {
+            ident: EntityId(0),
+            attr: "yote".to_string(),
+            value: ConcreteValue::Literal(Literal::Number(2)),
+        };
+
+        root.activate(test_wme1.clone(), ActivationMode::Add);
+        root.activate(test_wme2.clone(), ActivationMode::Add);
+        dbg!(&root);
+
+        root.activate(test_wme1.clone(), ActivationMode::Delete);
         dbg!(&root);
     }
 }
