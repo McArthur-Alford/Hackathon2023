@@ -662,7 +662,7 @@ fn abstract_wme_to_concrete(aw: AbstractWME, table: &mut JoinTable, id: &mut usi
 
     // For all generics, try to put them in the table IF THEY DONT ALREADY EXIST
     // They should have a unique entityId as they are added to new sockets
-    let syms = abstract_wme_into_symbols(aw);
+    let syms = abstract_wme_into_symbols(aw.clone());
     for sym in vec![syms.0.clone(), syms.1.clone(), syms.2.clone()] {
         if let Some(s) = sym {
             // This is a symbol, not a literal
@@ -680,18 +680,34 @@ fn abstract_wme_to_concrete(aw: AbstractWME, table: &mut JoinTable, id: &mut usi
         } else {
             panic!()
         },
-        attr: if let Some(JoinTableEntry::Literal(Literal::Text(lit))) =
+        attr: if matches!(&syms.clone().1, None) {
+            // The symbol is none, so we will just use the literal!
+            if let AbstractAttribute::Literal(str) = aw.attr {
+                str.clone()
+            } else {
+                panic!()
+            }
+        } else if let Some(JoinTableEntry::Literal(Literal::Text(lit))) =
             table.0.get(&syms.clone().1.unwrap())
         {
             lit.clone()
         } else {
             panic!()
         },
-        value: match table.0.get(&syms.clone().2.unwrap()) {
-            Some(JoinTableEntry::Variable(var)) => ConcreteValue::Variable(var.clone()),
-            Some(JoinTableEntry::Literal(lit)) => ConcreteValue::Literal(lit.clone()),
-            _ => {
+        value: if matches!(&syms.clone().2, None) {
+            // The symbol is none, so we will just use the literal!
+            if let AbstractValue::Literal(lit) = aw.value {
+                ConcreteValue::Literal(lit)
+            } else {
                 panic!()
+            }
+        } else {
+            match table.0.get(&syms.clone().2.unwrap()) {
+                Some(JoinTableEntry::Variable(var)) => ConcreteValue::Variable(var.clone()),
+                Some(JoinTableEntry::Literal(lit)) => ConcreteValue::Literal(lit.clone()),
+                _ => {
+                    panic!()
+                }
             }
         },
     }
@@ -701,13 +717,9 @@ impl AbstractProd {
     fn apply_production(&mut self, table: Vec<JoinTable>, id: &mut usize) -> Vec<ConcreteWME> {
         let mut changes = Vec::new();
         for entry in table {
-            println!("===================");
             // This is a production that matched the rule (terminology is really drifting this late.....)
             // That said, we only know the generic info, not the rest, which is what should happen
-            dbg!(&entry);
-            println!("-------------------------");
             for r in &mut self.rhs {
-                dbg!(&r);
                 changes.push(abstract_wme_to_concrete(r.clone(), &mut entry.clone(), id));
             }
         }
