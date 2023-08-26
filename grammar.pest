@@ -9,17 +9,16 @@ whitespace = _{ comment | " " | "\t" }
 char = _{ ASCII_ALPHA | digit | whitespace | ":" | "!" | "." }
 string = {"'" ~ char+ ~ "'"}
 number = { digit+ }
-wildcard = { "*" }
 
 // Constants and Identifiers:
 ident = { (alpha | "_") ~ (alpha | digit | "_")* }
 generic = { "<" ~ ident ~ ">" }
 
 // Variable
-var = { generic | wildcard }
+var = { generic }
 
 // Attribute Handle
-attr = { "^" ~ (ident | wildcard) }
+attr = { "^" ~ (ident | generic ) }
 
 // Literal types
 constant = { string | number | bool }

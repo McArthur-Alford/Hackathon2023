@@ -26,9 +26,9 @@ test_rule:
 
 /* Prints all possible pairs of elements on something, and elements under something */
 test_rule_2:
-    <y> ^on *
-    * ^on <x>
-    <z> ^* 'red' /* Matches anything with any attribute equal to red, powerful! */
+    <y> ^on <_>
+    <_> ^on <x>
+    <z> ^<a> 'red' /* Matches anything with any attribute equal to red, powerful! */
     ->
     <IO> ^print <y>
     <IO> ^print <x>
