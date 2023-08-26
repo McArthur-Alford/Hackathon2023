@@ -71,10 +71,9 @@ struct Production {
     abstract_production: AbstractProd,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct AlphaMemory {
     memories: HashSet<ConcreteWME>,
-    downstream: Vec<Rc<RefCell<Join>>>,
 }
 
 impl AlphaMemory {
@@ -86,22 +85,6 @@ impl AlphaMemory {
             self.memories.remove(&cw);
         }
     }
-}
-
-#[derive(Debug, Clone)]
-struct BetaNode {
-    memories: Vec<JoinTable>,
-    downstream: Vec<Rc<RefCell<Join>>>,
-    productions: Vec<Rc<RefCell<Production>>>,
-}
-
-#[derive(Debug, Clone)]
-struct Join {
-    test: Option<Vec<AbstractWME>>,
-    right_test: AbstractWME,
-    left_parent: Option<Rc<BetaNode>>,
-    right_parent: Rc<AlphaMemory>,
-    downstream: Vec<Rc<RefCell<BetaNode>>>, // A list of shared mutable references to all downstream nodes
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -155,164 +138,61 @@ fn abstract_wme_into_symbols(aw: AbstractWME) -> (Option<String>, Option<String>
     out
 }
 
-impl Join {
-    // Activates with a new element from the right
-    fn activate_right(
-        &mut self,
-        cw: ConcreteWME,
-        aw: AbstractWME,
-        mode: ActivationMode,
-        tables_override: Option<Vec<JoinTable>>,
-    ) {
-        let jte = concrete_wme_into_jte(cw);
-        let syms = abstract_wme_into_symbols(aw);
-        // We now have each value and symbol in the new entry (exhausting, right??)
-
-        if matches!(self.left_parent.clone(), None) {
-            // No left parent, so we cant just try and join cw/aw onto our tables.
-            // Instead we activate our child with a table containing cw/aw alone and return
-            let mut tables: Vec<JoinTable> = Vec::new();
-            let mut entry = HashMap::new();
-            if let Some(s) = syms.clone().0 {
-                entry.insert(s, jte.clone().0);
-            };
-            if let Some(s) = syms.clone().1 {
-                entry.insert(s, jte.clone().1);
-            };
-            if let Some(s) = syms.clone().2 {
-                entry.insert(s, jte.clone().2);
-            };
-            tables.push(JoinTable(entry));
-            for child in &self.downstream {
-                child.borrow_mut().activate(tables.clone(), mode);
-            }
-
-            return;
-        }
-
-        let mut tables: Vec<JoinTable> = Rc::try_unwrap(self.left_parent.clone().unwrap())
-            .unwrap()
-            .memories;
-        if let Some(tables_override) = tables_override {
-            tables = tables_override;
-        }
-
-        let new_tables = tables
-            .iter()
-            .filter(|table| {
-                let (a, b, c) = (
+fn join(patterns: Vec<AbstractWME>, alphas: Vec<AlphaMemory>) {
+    assert!((patterns.len()) == (alphas.len()));
+    // Each pattern i is the pattern alphas i follows
+    let jointables: Vec<JoinTable> = vec![JoinTable(HashMap::new())];
+    for (index, (pattern, alpha_memory)) in patterns.iter().zip(alphas).enumerate() {
+        // These are the syms that all elements of alpha_memory adhere to
+        let syms = abstract_wme_into_symbols(pattern.clone());
+        let mut new_jointables = Vec::new();
+        for entry in alpha_memory.memories {
+            let jte = concrete_wme_into_jte(entry);
+            // Get new jointables where the current entry fits, and insert its remainders
+            let mut combinations = jointables
+                .iter()
+                .filter(|table| {
+                    let (a, b, c) = (
+                        if let Some(s) = syms.clone().0 {
+                            table.0.get(&s)
+                        } else {
+                            None
+                        },
+                        if let Some(s) = syms.clone().1 {
+                            table.0.get(&s)
+                        } else {
+                            None
+                        },
+                        if let Some(s) = syms.clone().2 {
+                            table.0.get(&s)
+                        } else {
+                            None
+                        },
+                    );
+                    // Each a,b,c (if it exists) must equal the concrete
+                    // If not, its not a perfect match, we reject it
+                    *a.unwrap_or(&jte.clone().0) == jte.clone().0
+                        && *b.unwrap_or(&jte.clone().1) == jte.clone().1
+                        && *c.unwrap_or(&jte.clone().2) == jte.clone().2
+                })
+                .map(|table| {
+                    let mut table = table.clone();
                     if let Some(s) = syms.clone().0 {
-                        table.0.get(&s)
-                    } else {
-                        None
-                    },
+                        table.0.insert(s, jte.clone().0);
+                    };
                     if let Some(s) = syms.clone().1 {
-                        table.0.get(&s)
-                    } else {
-                        None
-                    },
+                        table.0.insert(s, jte.clone().1);
+                    };
                     if let Some(s) = syms.clone().2 {
-                        table.0.get(&s)
-                    } else {
-                        None
-                    },
-                );
-                // Each a,b,c (if it exists) must equal the concrete
-                // If not, its not a perfect match, we reject it
-                *a.unwrap_or(&jte.clone().0) == jte.clone().0
-                    && *b.unwrap_or(&jte.clone().1) == jte.clone().1
-                    && *c.unwrap_or(&jte.clone().2) == jte.clone().2
-            })
-            .map(|table| {
-                let mut table = table.clone();
-                if let Some(s) = syms.clone().0 {
-                    table.0.insert(s, jte.clone().0);
-                };
-                if let Some(s) = syms.clone().1 {
-                    table.0.insert(s, jte.clone().1);
-                };
-                if let Some(s) = syms.clone().2 {
-                    table.0.insert(s, jte.clone().2);
-                };
-                table
-            })
-            .collect::<Vec<JoinTable>>();
-        for child in &self.downstream {
-            child.borrow_mut().activate(tables.clone(), mode);
+                        table.0.insert(s, jte.clone().2);
+                    };
+                    table
+                })
+                .collect();
+
+            new_jointables.append(&mut combinations);
         }
     }
-
-    // Activates with a new match from the left (cws is a list of NEW table matches)
-    fn activate_left(&mut self, cws: Vec<JoinTable>, mode: ActivationMode) {
-        let right_parent = Rc::try_unwrap(self.right_parent.clone()).unwrap();
-        let right: HashSet<ConcreteWME> = right_parent.memories;
-        let aw = self.right_test.clone();
-        for cw in right {
-            self.activate_right(cw, aw.clone(), mode, Some(cws.clone()))
-        }
-    }
-}
-
-impl BetaNode {
-    fn activate(&mut self, cws: Vec<JoinTable>, mode: ActivationMode) {
-        for cw in cws.clone() {
-            self.memories.push(cw.clone());
-        }
-        for child in self.downstream.clone() {
-            child.borrow_mut().activate_left(cws.clone(), mode);
-        }
-        for production in self.productions.clone() {
-            production.borrow_mut().activate();
-        }
-    }
-}
-
-// #[derive(Debug, Clone)]
-// struct BetaNode {
-//     memories: Vec<JoinTable>,
-//     downstream: Vec<Rc<RefCell<Join>>>,
-//     productions: Vec<Rc<RefCell<Production>>>,
-// }
-
-// #[derive(Debug, Clone)]
-// struct Join {
-//     test: Option<Vec<AbstractWME>>,
-//     right_test: AbstractWME,
-//     left_parent: Option<Rc<BetaNode>>,
-//     right_parent: Rc<AlphaMemory>,
-//     downstream: Vec<Rc<RefCell<BetaNode>>>, // A list of shared mutable references to all downstream nodes
-// }
-
-fn generate_betas(pattern: Vec<AbstractWME>, alphanet: ConstantTestNode) -> Rc<RefCell<BetaNode>> {
-    let right_parent = alphanet.get_alpha(pattern[0].clone()).unwrap();
-    let beta = if pattern.len() > 1 {
-        let betanet = generate_betas(
-            pattern[0..pattern.len() - 1].iter().cloned().collect(),
-            alphanet,
-        );
-        betanet
-    } else {
-        Rc::new(RefCell::new(BetaNode {
-            memories: Vec::new(),
-            downstream: Vec::new(),
-            productions: Vec::new(),
-        }))
-    };
-    // Base Case, here we have a single pattern
-    let join = Rc::new(RefCell::new(Join {
-        test: None,
-        right_test: pattern[0].clone(),
-        left_parent: None,
-        right_parent,
-        downstream: vec![beta.clone()],
-    }));
-    // Update the alpha node to point at this too!
-    // let mut right_parent: Rc<AlphaMemory> = join.borrow_mut().clone().right_parent;
-    // Rc::get_mut(&mut right_parent)
-    //     .unwrap()
-    //     .downstream
-    //     .push(join);
-    beta
 }
 
 impl Production {
@@ -326,7 +206,7 @@ struct ConstantTestNode {
     // Test to perform on incoming ConcreteWMEs
     test: Option<AbstractWME>,
     // Downstream alpha memories
-    output_memory: Option<Rc<AlphaMemory>>,
+    output_memory: Option<AlphaMemory>,
     // Downstream constant tests
     children: Vec<Box<ConstantTestNode>>,
 }
@@ -428,9 +308,7 @@ impl ConstantTestNode {
                 // CW matched this constant test node pattern
                 // Add it to any directly downstream alpha memory:
                 if let Some(output_memory) = &mut self.output_memory.as_mut() {
-                    if let Some(output_memory) = Rc::get_mut(output_memory) {
-                        output_memory.activate(cw.clone(), mode);
-                    }
+                    output_memory.activate(cw.clone(), mode);
                 }
 
                 // Trigger all downstream concrete tests:
@@ -441,7 +319,7 @@ impl ConstantTestNode {
         } else {
             // CW matched this constant test node pattern
             // Add it to any directly downstream alpha memory:
-            if let Some(output_memory) = Rc::get_mut(&mut self.output_memory.as_mut().unwrap()) {
+            if let Some(output_memory) = self.output_memory.as_mut() {
                 output_memory.activate(cw.clone(), mode);
             }
 
@@ -453,7 +331,7 @@ impl ConstantTestNode {
     }
 
     // Get a Rc<RefCell<>> to an alpha matching the given pattern
-    fn get_alpha(&self, pattern: AbstractWME) -> Option<Rc<AlphaMemory>> {
+    fn get_alpha(&self, pattern: AbstractWME) -> Option<AlphaMemory> {
         for child in &self.children {
             if let Some(test) = &child.test {
                 let (a, b) = compare_aa(test.clone(), pattern.clone());
@@ -501,10 +379,11 @@ impl ConstantTestNode {
                     if aw_value_is_var {
                         // We dont need to create a child, but we can verify this has a alpha memory
                         if matches!(child.output_memory, None) {
-                            child.output_memory = Some(Rc::new(AlphaMemory {
-                                memories: HashSet::new(),
-                                downstream: Vec::new(),
-                            }));
+                            child.output_memory = Some(
+                                (AlphaMemory {
+                                    memories: HashSet::new(),
+                                }),
+                            );
                         }
                         return;
                     }
@@ -537,10 +416,11 @@ impl ConstantTestNode {
                     }),
                 }),
                 output_memory: if aw_value_is_var {
-                    Some(Rc::new(AlphaMemory {
-                        memories: HashSet::new(),
-                        downstream: Vec::new(),
-                    }))
+                    Some(
+                        (AlphaMemory {
+                            memories: HashSet::new(),
+                        }),
+                    )
                 } else {
                     None
                 },
@@ -572,10 +452,11 @@ impl ConstantTestNode {
                         })
                     },
                 }),
-                output_memory: Some(Rc::new(AlphaMemory {
-                    memories: HashSet::new(),
-                    downstream: Vec::new(),
-                })),
+                output_memory: Some(
+                    (AlphaMemory {
+                        memories: HashSet::new(),
+                    }),
+                ),
                 children: Vec::new(),
             });
             self.children.push(child);
@@ -726,10 +607,9 @@ fn main() {
                 identifier: "_".to_string(),
             }),
         }),
-        output_memory: Some(Rc::new(AlphaMemory {
+        output_memory: Some(AlphaMemory {
             memories: HashSet::new(),
-            downstream: Vec::new(),
-        })),
+        }),
         children: vec![],
     };
 
@@ -737,11 +617,6 @@ fn main() {
         root.add_abstract_production(Production {
             abstract_production: prod.clone(),
         });
-    }
-    dbg!(&root);
-
-    for prod in &out {
-        generate_betas(prod.rhs.clone(), root.clone());
     }
     dbg!(&root);
 }
