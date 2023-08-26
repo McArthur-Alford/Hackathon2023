@@ -138,11 +138,14 @@ fn abstract_wme_into_symbols(aw: AbstractWME) -> (Option<String>, Option<String>
     out
 }
 
-fn join(patterns: Vec<AbstractWME>, alphas: Vec<AlphaMemory>) {
+fn join(patterns: Vec<AbstractWME>, alphas: Vec<AlphaMemory>) -> Vec<JoinTable> {
+    // println!("Starting JOIN (watch out!)");
+    // dbg!(&patterns);
+    // dbg!(&alphas);
     assert!((patterns.len()) == (alphas.len()));
     // Each pattern i is the pattern alphas i follows
-    let jointables: Vec<JoinTable> = vec![JoinTable(HashMap::new())];
-    for (index, (pattern, alpha_memory)) in patterns.iter().zip(alphas).enumerate() {
+    let mut jointables: Vec<JoinTable> = vec![JoinTable(HashMap::new())];
+    for (pattern, alpha_memory) in patterns.iter().zip(alphas) {
         // These are the syms that all elements of alpha_memory adhere to
         let syms = abstract_wme_into_symbols(pattern.clone());
         let mut new_jointables = Vec::new();
@@ -192,13 +195,9 @@ fn join(patterns: Vec<AbstractWME>, alphas: Vec<AlphaMemory>) {
 
             new_jointables.append(&mut combinations);
         }
+        jointables = new_jointables;
     }
-}
-
-impl Production {
-    fn activate(&mut self) {
-        println!("WOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO");
-    }
+    jointables
 }
 
 #[derive(Debug, Clone)]
@@ -618,242 +617,337 @@ fn main() {
             abstract_production: prod.clone(),
         });
     }
-    dbg!(&root);
-}
 
-#[cfg(test)]
-mod tests {
-    use crate::*;
-    #[test]
-    fn test_add_rule() {
-        let mut root = ConstantTestNode {
-            test: Some(AbstractWME {
-                ident: Variable {
-                    identifier: "_".to_string(),
-                },
-                attr: AbstractAttribute::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-                value: AbstractValue::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-            }),
-            output_memory: Some(Rc::new(AlphaMemory {
-                memories: HashSet::new(),
-                downstream: Vec::new(),
-            })),
-            children: vec![],
-        };
-        root.add_awme(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("yeet".to_string()),
-            value: AbstractValue::Literal(Literal::Number(1)),
-        });
-        root.add_awme(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("yeet".to_string()),
-            value: AbstractValue::Literal(Literal::Number(2)),
-        });
-        root.add_awme(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("magic".to_string()),
-            value: AbstractValue::Literal(Literal::Number(1)),
-        });
-        root.add_awme(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("magic".to_string()),
-            value: AbstractValue::Literal(Literal::Number(2)),
-        });
-        root.add_awme(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("magic".to_string()),
-            value: AbstractValue::Variable(Variable {
-                identifier: "y".to_string(),
-            }),
-        });
+    // Standard Library WMEs:
+    let time1 = ConcreteWME {
+        ident: EntityId(0),
+        attr: "std".to_string(),
+        value: ConcreteValue::Literal(Literal::Text("timekeeper".to_string())),
+    };
+    let time2 = ConcreteWME {
+        ident: EntityId(0),
+        attr: "init".to_string(),
+        value: ConcreteValue::Literal(Literal::Bool(true)),
+    };
 
-        let test_wme1 = ConcreteWME {
-            ident: EntityId(0),
-            attr: "yeet".to_string(),
-            value: ConcreteValue::Literal(Literal::Number(1)),
-        };
-        let test_wme2 = ConcreteWME {
-            ident: EntityId(2),
-            attr: "yeet".to_string(),
-            value: ConcreteValue::Literal(Literal::Number(1)),
-        };
-        let test_wme3 = ConcreteWME {
-            ident: EntityId(1),
-            attr: "yeet".to_string(),
-            value: ConcreteValue::Literal(Literal::Number(2)),
-        };
+    root.activate(time1, ActivationMode::Add);
+    root.activate(time2, ActivationMode::Add);
 
-        root.activate(test_wme1.clone(), ActivationMode::Add);
-        root.activate(test_wme2.clone(), ActivationMode::Add);
-        root.activate(test_wme3.clone(), ActivationMode::Add);
-
-        dbg!(&root);
-    }
-
-    #[test]
-    fn test_add_wme() {
-        let child = ConstantTestNode {
-            test: Some(AbstractWME {
-                ident: Variable {
-                    identifier: "_".to_string(),
-                },
-                attr: AbstractAttribute::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-                value: AbstractValue::Literal(Literal::Number(1)),
-            }),
-            output_memory: Some(Rc::new(AlphaMemory {
-                memories: HashSet::new(),
-                downstream: Vec::new(),
-            })),
-            children: Vec::new(),
-        };
-        let child = ConstantTestNode {
-            test: Some(AbstractWME {
-                ident: Variable {
-                    identifier: "_".to_string(),
-                },
-                attr: AbstractAttribute::Literal("yete".to_string()),
-                value: AbstractValue::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-            }),
-            output_memory: Some(Rc::new(AlphaMemory {
-                memories: HashSet::new(),
-                downstream: Vec::new(),
-            })),
-            children: vec![Box::new(child)],
-        };
-        let mut root = ConstantTestNode {
-            test: Some(AbstractWME {
-                ident: Variable {
-                    identifier: "_".to_string(),
-                },
-                attr: AbstractAttribute::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-                value: AbstractValue::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-            }),
-            output_memory: Some(Rc::new(AlphaMemory {
-                memories: HashSet::new(),
-                downstream: Vec::new(),
-            })),
-            children: vec![Box::new(child)],
-        };
-        dbg!(&root);
-
-        let test_wme = ConcreteWME {
-            ident: EntityId(0),
-            attr: "yote".to_string(),
-            value: ConcreteValue::Literal(Literal::Number(1)),
-        };
-        let test_wme2 = ConcreteWME {
-            ident: EntityId(1),
-            attr: "yete".to_string(),
-            value: ConcreteValue::Literal(Literal::Number(1)),
-        };
-        let test_wme3 = ConcreteWME {
-            ident: EntityId(2),
-            attr: "yete".to_string(),
-            value: ConcreteValue::Literal(Literal::Number(2)),
-        };
-
-        dbg!(&test_wme);
-
-        root.activate(test_wme, ActivationMode::Add);
-        root.activate(test_wme2, ActivationMode::Add);
-        root.activate(test_wme3, ActivationMode::Add);
-
-        dbg!(&root);
-    }
-
-    #[test]
-    fn test_simple_remove() {
-        let mut root = ConstantTestNode {
-            test: Some(AbstractWME {
-                ident: Variable {
-                    identifier: "_".to_string(),
-                },
-                attr: AbstractAttribute::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-                value: AbstractValue::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-            }),
-            output_memory: Some(Rc::new(AlphaMemory {
-                memories: HashSet::new(),
-                downstream: Vec::new(),
-            })),
-            children: vec![],
-        };
-        root.add_awme(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("yeet".to_string()),
-            value: AbstractValue::Literal(Literal::Number(1)),
-        });
-        root.add_awme(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("yote".to_string()),
-            value: AbstractValue::Literal(Literal::Number(2)),
-        });
-        root.add_awme(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("yeet".to_string()),
-            value: AbstractValue::Variable(Variable {
-                identifier: "z".to_string(),
-            }),
-        });
-
-        let test_wme1 = ConcreteWME {
-            ident: EntityId(0),
-            attr: "yeet".to_string(),
-            value: ConcreteValue::Literal(Literal::Number(1)),
-        };
-        let test_wme2 = ConcreteWME {
-            ident: EntityId(0),
-            attr: "yote".to_string(),
-            value: ConcreteValue::Literal(Literal::Number(2)),
-        };
-
-        root.activate(test_wme1.clone(), ActivationMode::Add);
-        root.activate(test_wme2.clone(), ActivationMode::Add);
-        dbg!(&root);
-
-        root.activate(test_wme1.clone(), ActivationMode::Delete);
-        dbg!(&root);
-
-        let alpha = root.get_alpha(AbstractWME {
-            ident: Variable {
-                identifier: "x".to_string(),
-            },
-            attr: AbstractAttribute::Literal("yeet".to_string()),
-            value: AbstractValue::Literal(Literal::Number(1)),
-        });
-
-        dbg!(alpha);
+    loop {
+        let mut changes = Vec::new();
+        let mut fresh_id = 10;
+        for prod in &out {
+            // lhs of production
+            let lhs = &prod.lhs;
+            let mut alphas = Vec::new();
+            for l in lhs {
+                if let Some(alpha) = root.get_alpha(l.clone()) {
+                    alphas.push(alpha)
+                }
+            }
+            let join = join(lhs.clone(), alphas);
+            changes.append(&mut prod.clone().apply_production(join, &mut fresh_id));
+        }
+        for change in changes {
+            root.activate(change, ActivationMode::Add);
+        }
     }
 }
+
+fn abstract_wme_to_concrete(aw: AbstractWME, table: &mut JoinTable, id: &mut usize) -> ConcreteWME {
+    // Will replace generics with those in the table if possible
+    // Remaining generics are added to a NEW jointable
+    // Each is then given an entityId correlation
+    // These are then subbed back in
+
+    // For all generics, try to put them in the table IF THEY DONT ALREADY EXIST
+    // They should have a unique entityId as they are added to new sockets
+    let syms = abstract_wme_into_symbols(aw);
+    for sym in vec![syms.0.clone(), syms.1.clone(), syms.2.clone()] {
+        if let Some(s) = sym {
+            // This is a symbol, not a literal
+            if !table.0.contains_key(&s) {
+                table
+                    .0
+                    .insert(s, JoinTableEntry::Variable(EntityId(*id + 1)));
+                *id += 1;
+            }
+        }
+    }
+    ConcreteWME {
+        ident: if let Some(JoinTableEntry::Variable(var)) = table.0.get(&syms.clone().0.unwrap()) {
+            var.clone()
+        } else {
+            panic!()
+        },
+        attr: if let Some(JoinTableEntry::Literal(Literal::Text(lit))) =
+            table.0.get(&syms.clone().1.unwrap())
+        {
+            lit.clone()
+        } else {
+            panic!()
+        },
+        value: match table.0.get(&syms.clone().2.unwrap()) {
+            Some(JoinTableEntry::Variable(var)) => ConcreteValue::Variable(var.clone()),
+            Some(JoinTableEntry::Literal(lit)) => ConcreteValue::Literal(lit.clone()),
+            _ => {
+                panic!()
+            }
+        },
+    }
+}
+
+impl AbstractProd {
+    fn apply_production(&mut self, table: Vec<JoinTable>, id: &mut usize) -> Vec<ConcreteWME> {
+        let mut changes = Vec::new();
+        for entry in table {
+            println!("===================");
+            // This is a production that matched the rule (terminology is really drifting this late.....)
+            // That said, we only know the generic info, not the rest, which is what should happen
+            dbg!(&entry);
+            println!("-------------------------");
+            for r in &mut self.rhs {
+                dbg!(&r);
+                changes.push(abstract_wme_to_concrete(r.clone(), &mut entry.clone(), id));
+            }
+        }
+        Vec::new()
+    }
+}
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::*;
+//     #[test]
+//     fn test_add_rule() {
+//         let mut root = ConstantTestNode {
+//             test: Some(AbstractWME {
+//                 ident: Variable {
+//                     identifier: "_".to_string(),
+//                 },
+//                 attr: AbstractAttribute::Variable(Variable {
+//                     identifier: "_".to_string(),
+//                 }),
+//                 value: AbstractValue::Variable(Variable {
+//                     identifier: "_".to_string(),
+//                 }),
+//             }),
+//             output_memory: Some(Rc::new(AlphaMemory {
+//                 memories: HashSet::new(),
+//                 downstream: Vec::new(),
+//             })),
+//             children: vec![],
+//         };
+//         root.add_awme(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("yeet".to_string()),
+//             value: AbstractValue::Literal(Literal::Number(1)),
+//         });
+//         root.add_awme(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("yeet".to_string()),
+//             value: AbstractValue::Literal(Literal::Number(2)),
+//         });
+//         root.add_awme(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("magic".to_string()),
+//             value: AbstractValue::Literal(Literal::Number(1)),
+//         });
+//         root.add_awme(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("magic".to_string()),
+//             value: AbstractValue::Literal(Literal::Number(2)),
+//         });
+//         root.add_awme(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("magic".to_string()),
+//             value: AbstractValue::Variable(Variable {
+//                 identifier: "y".to_string(),
+//             }),
+//         });
+
+//         let test_wme1 = ConcreteWME {
+//             ident: EntityId(0),
+//             attr: "yeet".to_string(),
+//             value: ConcreteValue::Literal(Literal::Number(1)),
+//         };
+//         let test_wme2 = ConcreteWME {
+//             ident: EntityId(2),
+//             attr: "yeet".to_string(),
+//             value: ConcreteValue::Literal(Literal::Number(1)),
+//         };
+//         let test_wme3 = ConcreteWME {
+//             ident: EntityId(1),
+//             attr: "yeet".to_string(),
+//             value: ConcreteValue::Literal(Literal::Number(2)),
+//         };
+
+//         root.activate(test_wme1.clone(), ActivationMode::Add);
+//         root.activate(test_wme2.clone(), ActivationMode::Add);
+//         root.activate(test_wme3.clone(), ActivationMode::Add);
+
+//         dbg!(&root);
+//     }
+
+//     #[test]
+//     fn test_add_wme() {
+//         let child = ConstantTestNode {
+//             test: Some(AbstractWME {
+//                 ident: Variable {
+//                     identifier: "_".to_string(),
+//                 },
+//                 attr: AbstractAttribute::Variable(Variable {
+//                     identifier: "_".to_string(),
+//                 }),
+//                 value: AbstractValue::Literal(Literal::Number(1)),
+//             }),
+//             output_memory: Some(Rc::new(AlphaMemory {
+//                 memories: HashSet::new(),
+//                 downstream: Vec::new(),
+//             })),
+//             children: Vec::new(),
+//         };
+//         let child = ConstantTestNode {
+//             test: Some(AbstractWME {
+//                 ident: Variable {
+//                     identifier: "_".to_string(),
+//                 },
+//                 attr: AbstractAttribute::Literal("yete".to_string()),
+//                 value: AbstractValue::Variable(Variable {
+//                     identifier: "_".to_string(),
+//                 }),
+//             }),
+//             output_memory: Some(Rc::new(AlphaMemory {
+//                 memories: HashSet::new(),
+//                 downstream: Vec::new(),
+//             })),
+//             children: vec![Box::new(child)],
+//         };
+//         let mut root = ConstantTestNode {
+//             test: Some(AbstractWME {
+//                 ident: Variable {
+//                     identifier: "_".to_string(),
+//                 },
+//                 attr: AbstractAttribute::Variable(Variable {
+//                     identifier: "_".to_string(),
+//                 }),
+//                 value: AbstractValue::Variable(Variable {
+//                     identifier: "_".to_string(),
+//                 }),
+//             }),
+//             output_memory: Some(Rc::new(AlphaMemory {
+//                 memories: HashSet::new(),
+//                 downstream: Vec::new(),
+//             })),
+//             children: vec![Box::new(child)],
+//         };
+//         dbg!(&root);
+
+//         let test_wme = ConcreteWME {
+//             ident: EntityId(0),
+//             attr: "yote".to_string(),
+//             value: ConcreteValue::Literal(Literal::Number(1)),
+//         };
+//         let test_wme2 = ConcreteWME {
+//             ident: EntityId(1),
+//             attr: "yete".to_string(),
+//             value: ConcreteValue::Literal(Literal::Number(1)),
+//         };
+//         let test_wme3 = ConcreteWME {
+//             ident: EntityId(2),
+//             attr: "yete".to_string(),
+//             value: ConcreteValue::Literal(Literal::Number(2)),
+//         };
+
+//         dbg!(&test_wme);
+
+//         root.activate(test_wme, ActivationMode::Add);
+//         root.activate(test_wme2, ActivationMode::Add);
+//         root.activate(test_wme3, ActivationMode::Add);
+
+//         dbg!(&root);
+//     }
+
+//     #[test]
+//     fn test_simple_remove() {
+//         let mut root = ConstantTestNode {
+//             test: Some(AbstractWME {
+//                 ident: Variable {
+//                     identifier: "_".to_string(),
+//                 },
+//                 attr: AbstractAttribute::Variable(Variable {
+//                     identifier: "_".to_string(),
+//                 }),
+//                 value: AbstractValue::Variable(Variable {
+//                     identifier: "_".to_string(),
+//                 }),
+//             }),
+//             output_memory: Some(Rc::new(AlphaMemory {
+//                 memories: HashSet::new(),
+//                 downstream: Vec::new(),
+//             })),
+//             children: vec![],
+//         };
+//         root.add_awme(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("yeet".to_string()),
+//             value: AbstractValue::Literal(Literal::Number(1)),
+//         });
+//         root.add_awme(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("yote".to_string()),
+//             value: AbstractValue::Literal(Literal::Number(2)),
+//         });
+//         root.add_awme(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("yeet".to_string()),
+//             value: AbstractValue::Variable(Variable {
+//                 identifier: "z".to_string(),
+//             }),
+//         });
+
+//         let test_wme1 = ConcreteWME {
+//             ident: EntityId(0),
+//             attr: "yeet".to_string(),
+//             value: ConcreteValue::Literal(Literal::Number(1)),
+//         };
+//         let test_wme2 = ConcreteWME {
+//             ident: EntityId(0),
+//             attr: "yote".to_string(),
+//             value: ConcreteValue::Literal(Literal::Number(2)),
+//         };
+
+//         root.activate(test_wme1.clone(), ActivationMode::Add);
+//         root.activate(test_wme2.clone(), ActivationMode::Add);
+//         dbg!(&root);
+
+//         root.activate(test_wme1.clone(), ActivationMode::Delete);
+//         dbg!(&root);
+
+//         let alpha = root.get_alpha(AbstractWME {
+//             ident: Variable {
+//                 identifier: "x".to_string(),
+//             },
+//             attr: AbstractAttribute::Literal("yeet".to_string()),
+//             value: AbstractValue::Literal(Literal::Number(1)),
+//         });
+
+//         dbg!(alpha);
+//     }
+// }
