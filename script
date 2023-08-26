@@ -1,34 +1,8 @@
 init_rule:
     <TIME> ^std 'timekeeper'
     <TIME> ^init True
+    <IO> ^std 'io'
     ->
-    <box1> ^on <box2>
     <box1> ^id 'box1'
-
-    <box2> ^left_of <box3>
-    <box2> ^id 'box2'
-    <box2> ^colour 'pink'
-
-    <box3> ^colour 'red'
-    <box3> ^id 'box3'
-
-test_rule:
-    <x> ^on <y>
-    <y> ^left_of <z>
-    <y> ^colour <c>
-    <z> ^colour 'red'
-    <IO> ^system 'IO'
-    ->
-    <z> ^colour 'blue' /* This makes the rule unable to match in future */
-    /* We then print the colour of the middle box: */
-    <IO> ^print 'The middle box has colour' 
-    <IO> ^print <c>
-
-/* Prints all possible pairs of elements on something, and elements under something */
-test_rule_2:
-    <y> ^on <_>
-    <_> ^on <x>
-    <z> ^<a> 'red' /* Matches anything with any attribute equal to red, powerful! */
-    ->
-    <IO> ^print <y>
-    <IO> ^print <x>
+    <box1> ^colour 'red'
+    <IO> ^print 'yew'

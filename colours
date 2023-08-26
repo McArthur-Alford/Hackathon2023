@@ -1,0 +1,18 @@
+init_rule:
+    <TIME> ^std 'timekeeper'
+    <TIME> ^init True
+    ->
+    <box1> ^id 'box1'
+    <box1> ^colour 'red'
+
+red_to_blue:
+    <x> ^colour 'red'
+    <IO> ^std 'IO'
+    ->
+    <x> ^colour 'blue'
+
+blue_to_red:
+    <x> ^colour 'blue'
+    <IO> ^std 'IO'
+    ->
+    <x> ^colour 'red'
