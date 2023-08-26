@@ -99,7 +99,7 @@ struct BetaNode {
 struct Join {
     test: Option<Vec<AbstractWME>>,
     right_test: AbstractWME,
-    left_parent: Rc<BetaNode>,
+    left_parent: Option<Rc<BetaNode>>,
     right_parent: Rc<AlphaMemory>,
     downstream: Vec<Rc<RefCell<BetaNode>>>, // A list of shared mutable references to all downstream nodes
 }
@@ -168,7 +168,31 @@ impl Join {
         let syms = abstract_wme_into_symbols(aw);
         // We now have each value and symbol in the new entry (exhausting, right??)
 
-        let mut tables: Vec<JoinTable> = Rc::try_unwrap(self.left_parent.clone()).unwrap().memories;
+        if matches!(self.left_parent.clone(), None) {
+            // No left parent, so we cant just try and join cw/aw onto our tables.
+            // Instead we activate our child with a table containing cw/aw alone and return
+            let mut tables: Vec<JoinTable> = Vec::new();
+            let mut entry = HashMap::new();
+            if let Some(s) = syms.clone().0 {
+                entry.insert(s, jte.clone().0);
+            };
+            if let Some(s) = syms.clone().1 {
+                entry.insert(s, jte.clone().1);
+            };
+            if let Some(s) = syms.clone().2 {
+                entry.insert(s, jte.clone().2);
+            };
+            tables.push(JoinTable(entry));
+            for child in &self.downstream {
+                child.borrow_mut().activate(tables.clone(), mode);
+            }
+
+            return;
+        }
+
+        let mut tables: Vec<JoinTable> = Rc::try_unwrap(self.left_parent.clone().unwrap())
+            .unwrap()
+            .memories;
         if let Some(tables_override) = tables_override {
             tables = tables_override;
         }
@@ -237,10 +261,14 @@ impl BetaNode {
         for child in self.downstream.clone() {
             child.borrow_mut().activate_left(cws.clone(), mode);
         }
+        for production in self.productions.clone() {
+            production.borrow_mut().activate();
+        }
     }
-    // memories: Vec<JoinTable>,
-    // downstream: Vec<Rc<RefCell<Join>>>,
-    // productions: Vec<Rc<RefCell<Production>>>,
+}
+
+impl Production {
+    fn activate(&mut self) {}
 }
 
 #[derive(Debug)]
