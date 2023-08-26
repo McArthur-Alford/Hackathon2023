@@ -10,7 +10,7 @@ use std::fs;
 #[grammar = "grammar.pest"]
 pub struct CSVParser;
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct Variable {
     identifier: String,
 }
@@ -22,13 +22,13 @@ enum Literal {
     Bool(bool),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AbstractAttribute {
     Literal(String),
     Variable(Variable),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum AbstractValue {
     Literal(Literal),
     Variable(Variable),
@@ -40,7 +40,7 @@ enum ConcreteValue {
     Variable(EntityId),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct AbstractWME {
     ident: Variable,
     attr: AbstractAttribute,
@@ -54,7 +54,7 @@ struct ConcreteWME {
     value: ConcreteValue,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct AbstractProd {
     precedence: usize,
     lhs: Vec<AbstractWME>,
@@ -64,9 +64,15 @@ struct AbstractProd {
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 struct EntityId(usize);
 
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+struct Production {
+    abstract_production: AbstractProd,
+}
+
 #[derive(Debug)]
 struct AlphaMemory {
     memories: HashSet<ConcreteWME>,
+    productions: HashSet<Production>,
 }
 
 impl AlphaMemory {
@@ -109,6 +115,69 @@ fn pattern_match(cw: ConcreteWME, aw: AbstractWME) -> bool {
     true
 }
 
+fn compare_aa(wme1: AbstractWME, wme2: AbstractWME) -> (bool, bool) {
+    // Is the attr the same, literally, or both a val
+    let mut out = (false, false);
+    if let AbstractAttribute::Literal(lit1) = wme1.attr.clone() {
+        if let AbstractAttribute::Literal(lit2) = wme2.attr.clone() {
+            if lit1 == lit2 {
+                out = (true, out.1);
+            }
+        }
+    }
+    // Its a variable, so we match them regardless
+    if matches!(wme1.attr.clone(), AbstractAttribute::Variable(x))
+        && matches!(wme2.attr.clone(), AbstractAttribute::Variable(x))
+    {
+        out = (true, out.1);
+    }
+    // Ensure both literal values are the same
+    if let AbstractValue::Literal(lit) = wme1.value.clone() {
+        if let AbstractValue::Literal(lit2) = wme2.value.clone() {
+            if lit == lit2 {
+                out = (out.0, true);
+            }
+        }
+    }
+    // OR ensure they are both variables
+    if matches!(wme1.value.clone(), AbstractValue::Variable(x))
+        && matches!(wme2.value.clone(), AbstractValue::Variable(x))
+    {
+        out = (out.0, true);
+    }
+    out
+}
+
+fn compare_ac(wme1: AbstractWME, wme2: ConcreteWME) -> (bool, bool) {
+    // Is the attr the same, literally, or both a val
+    let mut out = (false, false);
+    if let AbstractAttribute::Literal(text) = wme1.attr.clone() {
+        if text == wme2.attr {
+            // Same text value
+            out = (true, out.1);
+        }
+    }
+    // Its a variable, so we match them regardless
+    if matches!(wme1.attr.clone(), AbstractAttribute::Variable(x)) {
+        out = (true, out.1);
+    }
+    // Ensure both literal values are the same
+    if let AbstractValue::Literal(lit) = wme1.value.clone() {
+        if let ConcreteValue::Literal(lit2) = wme2.value.clone() {
+            if lit == lit2 {
+                out = (out.0, true);
+            }
+        }
+    }
+    // OR ensure they are both variables
+    if matches!(wme1.value.clone(), AbstractValue::Variable(x))
+        && matches!(wme2.value.clone(), ConcreteValue::Variable(x))
+    {
+        out = (out.0, true);
+    }
+    out
+}
+
 impl ConstantTestNode {
     fn activate(&mut self, cw: ConcreteWME) {
         if let Some(test) = self.test.clone() {
@@ -141,96 +210,114 @@ impl ConstantTestNode {
     // This should only be run on root
     // else everything in the world will crash & burn
     fn add_awme(&mut self, aw: AbstractWME) {
-        self.add_awme_attr(aw);
+        self.add_awme_rec(aw, true);
     }
 
-    // This should only be run on the middle rule
-    fn add_awme_attr(&mut self, aw: AbstractWME) {
-        for child in &mut self.children {
-            // This child has the same test as this
-            if let Some(test) = child.test.clone() {
-                if test.attr == aw.clone().attr
-                    && !(matches!(test.attr, AbstractAttribute::Variable(x))
-                        && matches!(aw.clone().attr, AbstractAttribute::Variable(y)))
-                {
-                    if matches!(test.value, AbstractValue::Variable(x))
-                        && matches!(child.output_memory, None)
-                    {
-                        child.output_memory = Some(AlphaMemory {
-                            memories: HashSet::new(),
-                        });
+    fn add_abstract_production(&mut self, prod: Production) {
+        let lhs = prod.abstract_production.lhs;
+        for elem in lhs {
+            self.add_awme_rec(elem, true);
+        }
+    }
 
+    fn add_awme_rec(&mut self, aw: AbstractWME, at_attr: bool) {
+        let aw_value_is_var = matches!(aw.value.clone(), AbstractValue::Variable(x));
+        let aw_attr_is_var = matches!(aw.attr.clone(), AbstractAttribute::Variable(x));
+        if aw_value_is_var && aw_attr_is_var {
+            // In this case everything is already handled by the root node! Wohoo!
+            return;
+        }
+        if !at_attr && aw_value_is_var {
+            // We dont need to create anything in this case, however you would sure hope the parent has an
+            // alpha memory ready!
+            return;
+        }
+        for child in &mut self.children {
+            if let Some(test) = child.test.clone() {
+                let comparison = compare_aa(aw.clone(), test.clone());
+                if comparison.0 && at_attr {
+                    if aw_value_is_var {
+                        // We dont need to create a child, but we can verify this has a alpha memory
+                        if matches!(child.output_memory, None) {
+                            child.output_memory = Some(AlphaMemory {
+                                memories: HashSet::new(),
+                                productions: HashSet::new(),
+                            });
+                        }
                         return;
                     }
-                    // We hit an existing child testing this attr!
-                    for child2 in &mut child.children {
-                        if let Some(test) = child2.test.clone() {
-                            if test.value == aw.value {
-                                return;
-                            }
-                        }
-                    }
-                    child.children.push(Box::new(ConstantTestNode {
-                        test: Some(AbstractWME {
-                            ident: aw.ident.clone(),
-                            attr: aw.attr.clone(),
-                            value: aw.value.clone(),
-                        }),
-                        output_memory: Some(AlphaMemory {
-                            memories: HashSet::new(),
-                        }),
-                        children: Vec::new(),
-                    }));
+                    // We found a child which already matches this attr, so we will forward the work to it
+                    child.add_awme_rec(aw, !at_attr);
+                    return;
+                }
+                if comparison.1 && !at_attr {
+                    // We found a child which already matches this value, so we dont need to do anything
                     return;
                 }
             }
         }
-        // No child already matched the attr part
-        // Create a new child!
-
-        // We make an output memory for a new alpha node if there isnt any more depth
-        let mut children: Vec<Box<ConstantTestNode>> = Vec::new();
-        let output_memory = if !(matches!(aw.value, AbstractValue::Variable(_))) {
-            // We can also create a child node, seeing as it goes deeper
-            children.push(Box::new(ConstantTestNode {
+        // No child was found already matching, so we can create one safely!
+        if at_attr {
+            let mut child = Box::new(ConstantTestNode {
                 test: Some(AbstractWME {
-                    ident: aw.ident.clone(),
-                    attr: aw.attr.clone(),
-                    value: aw.value,
+                    ident: Variable {
+                        identifier: "_".to_string(),
+                    },
+                    attr: if !aw_attr_is_var {
+                        aw.attr.clone()
+                    } else {
+                        AbstractAttribute::Variable(Variable {
+                            identifier: "_".to_string(),
+                        })
+                    },
+                    value: AbstractValue::Variable(Variable {
+                        identifier: "_".to_string(),
+                    }),
+                }),
+                output_memory: if aw_value_is_var {
+                    Some(AlphaMemory {
+                        memories: HashSet::new(),
+                        productions: HashSet::new(),
+                    })
+                } else {
+                    None
+                },
+                children: Vec::new(),
+            });
+            if !aw_value_is_var {
+                // Make sure the subnode is prepared if necessary
+                child.add_awme_rec(aw, !at_attr);
+            }
+            self.children.push(child);
+        } else {
+            let mut child = Box::new(ConstantTestNode {
+                test: Some(AbstractWME {
+                    ident: Variable {
+                        identifier: "_".to_string(),
+                    },
+                    attr: if !aw_attr_is_var {
+                        aw.attr.clone()
+                    } else {
+                        AbstractAttribute::Variable(Variable {
+                            identifier: "_".to_string(),
+                        })
+                    },
+                    value: if !aw_value_is_var {
+                        aw.value.clone()
+                    } else {
+                        AbstractValue::Variable(Variable {
+                            identifier: "_".to_string(),
+                        })
+                    },
                 }),
                 output_memory: Some(AlphaMemory {
                     memories: HashSet::new(),
+                    productions: HashSet::new(),
                 }),
                 children: Vec::new(),
-            }));
-            None
-        } else {
-            Some(AlphaMemory {
-                memories: HashSet::new(),
-            })
-        };
-        self.children.push(Box::new(ConstantTestNode {
-            test: Some(AbstractWME {
-                ident: aw.ident.clone(),
-                attr: aw.attr.clone(),
-                value: AbstractValue::Variable(Variable {
-                    identifier: "_".to_string(),
-                }),
-            }),
-            output_memory,
-            children,
-        }));
-    }
-
-    // Drops an entityId from the network
-    // Useful if it is being modified
-    fn drop_entity(&mut self, id: EntityId) {
-        // if let Some(memory) = self.output_memory {
-        //     memory.drop_entity(id);
-        // }
-        // for child in &mut self.children {
-        //     child.
-        // }
+            });
+            self.children.push(child);
+        }
     }
 }
 
@@ -364,13 +451,31 @@ fn main() {
         .unwrap();
 
     let out = process_file(file);
-    dbg!(out);
 
-    let root = ConstantTestNode {
-        test: None,
-        output_memory: None,
-        children: Vec::new(),
+    let mut root = ConstantTestNode {
+        test: Some(AbstractWME {
+            ident: Variable {
+                identifier: "_".to_string(),
+            },
+            attr: AbstractAttribute::Variable(Variable {
+                identifier: "_".to_string(),
+            }),
+            value: AbstractValue::Variable(Variable {
+                identifier: "_".to_string(),
+            }),
+        }),
+        output_memory: Some(AlphaMemory {
+            memories: HashSet::new(),
+            productions: HashSet::new(),
+        }),
+        children: vec![],
     };
+
+    for prod in out {
+        root.add_abstract_production(Production {
+            abstract_production: prod,
+        });
+    }
     dbg!(root);
 }
 
@@ -393,6 +498,7 @@ mod tests {
             }),
             output_memory: Some(AlphaMemory {
                 memories: HashSet::new(),
+                productions: HashSet::new(),
             }),
             children: vec![],
         };
@@ -471,6 +577,7 @@ mod tests {
             }),
             output_memory: Some(AlphaMemory {
                 memories: HashSet::new(),
+                productions: HashSet::new(),
             }),
             children: Vec::new(),
         };
@@ -486,6 +593,7 @@ mod tests {
             }),
             output_memory: Some(AlphaMemory {
                 memories: HashSet::new(),
+                productions: HashSet::new(),
             }),
             children: vec![Box::new(child)],
         };
@@ -503,6 +611,7 @@ mod tests {
             }),
             output_memory: Some(AlphaMemory {
                 memories: HashSet::new(),
+                productions: HashSet::new(),
             }),
             children: vec![Box::new(child)],
         };
