@@ -74,7 +74,7 @@ struct Production {
 #[derive(Debug)]
 struct AlphaMemory {
     memories: HashSet<ConcreteWME>,
-    downstream: HashSet<Join>,
+    downstream: Vec<Rc<RefCell<Join>>>,
 }
 
 impl AlphaMemory {
@@ -284,35 +284,44 @@ impl BetaNode {
 // }
 
 fn generate_betas(pattern: Vec<AbstractWME>, alphanet: ConstantTestNode) -> Rc<RefCell<BetaNode>> {
-    if pattern.len() > 1 {
+    let right_parent = alphanet.get_alpha(pattern[0].clone()).unwrap();
+    let beta = if pattern.len() > 1 {
         let betanet = generate_betas(
             pattern[0..pattern.len() - 1].iter().cloned().collect(),
             alphanet,
         );
         betanet
     } else {
-        let beta = Rc::new(RefCell::new(BetaNode {
+        Rc::new(RefCell::new(BetaNode {
             memories: Vec::new(),
             downstream: Vec::new(),
             productions: Vec::new(),
-        }));
-        // Base Case, here we have a single pattern
-        let join = Join {
-            test: None,
-            right_test: pattern[0].clone(),
-            left_parent: None,
-            right_parent: alphanet.get_alpha(pattern[0].clone()).unwrap(),
-            downstream: vec![beta.clone()],
-        };
-        beta
-    }
+        }))
+    };
+    // Base Case, here we have a single pattern
+    let join = Rc::new(RefCell::new(Join {
+        test: None,
+        right_test: pattern[0].clone(),
+        left_parent: None,
+        right_parent,
+        downstream: vec![beta.clone()],
+    }));
+    // Update the alpha node to point at this too!
+    // let mut right_parent: Rc<AlphaMemory> = join.borrow_mut().clone().right_parent;
+    // Rc::get_mut(&mut right_parent)
+    //     .unwrap()
+    //     .downstream
+    //     .push(join);
+    beta
 }
 
 impl Production {
-    fn activate(&mut self) {}
+    fn activate(&mut self) {
+        println!("WOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOOO");
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct ConstantTestNode {
     // Test to perform on incoming ConcreteWMEs
     test: Option<AbstractWME>,
@@ -418,9 +427,10 @@ impl ConstantTestNode {
             if pattern_match(cw.clone(), test) {
                 // CW matched this constant test node pattern
                 // Add it to any directly downstream alpha memory:
-                if let Some(output_memory) = Rc::get_mut(&mut self.output_memory.as_mut().unwrap())
-                {
-                    output_memory.activate(cw.clone(), mode);
+                if let Some(output_memory) = &mut self.output_memory.as_mut() {
+                    if let Some(output_memory) = Rc::get_mut(output_memory) {
+                        output_memory.activate(cw.clone(), mode);
+                    }
                 }
 
                 // Trigger all downstream concrete tests:
@@ -493,7 +503,7 @@ impl ConstantTestNode {
                         if matches!(child.output_memory, None) {
                             child.output_memory = Some(Rc::new(AlphaMemory {
                                 memories: HashSet::new(),
-                                downstream: HashSet::new(),
+                                downstream: Vec::new(),
                             }));
                         }
                         return;
@@ -529,7 +539,7 @@ impl ConstantTestNode {
                 output_memory: if aw_value_is_var {
                     Some(Rc::new(AlphaMemory {
                         memories: HashSet::new(),
-                        downstream: HashSet::new(),
+                        downstream: Vec::new(),
                     }))
                 } else {
                     None
@@ -564,7 +574,7 @@ impl ConstantTestNode {
                 }),
                 output_memory: Some(Rc::new(AlphaMemory {
                     memories: HashSet::new(),
-                    downstream: HashSet::new(),
+                    downstream: Vec::new(),
                 })),
                 children: Vec::new(),
             });
@@ -718,17 +728,22 @@ fn main() {
         }),
         output_memory: Some(Rc::new(AlphaMemory {
             memories: HashSet::new(),
-            downstream: HashSet::new(),
+            downstream: Vec::new(),
         })),
         children: vec![],
     };
 
-    for prod in out {
+    for prod in &out {
         root.add_abstract_production(Production {
-            abstract_production: prod,
+            abstract_production: prod.clone(),
         });
     }
-    dbg!(root);
+    dbg!(&root);
+
+    for prod in &out {
+        generate_betas(prod.rhs.clone(), root.clone());
+    }
+    dbg!(&root);
 }
 
 #[cfg(test)]
@@ -748,10 +763,10 @@ mod tests {
                     identifier: "_".to_string(),
                 }),
             }),
-            output_memory: Some(AlphaMemory {
+            output_memory: Some(Rc::new(AlphaMemory {
                 memories: HashSet::new(),
-                downstream: HashSet::new(),
-            }),
+                downstream: Vec::new(),
+            })),
             children: vec![],
         };
         root.add_awme(AbstractWME {
@@ -827,10 +842,10 @@ mod tests {
                 }),
                 value: AbstractValue::Literal(Literal::Number(1)),
             }),
-            output_memory: Some(AlphaMemory {
+            output_memory: Some(Rc::new(AlphaMemory {
                 memories: HashSet::new(),
-                downstream: HashSet::new(),
-            }),
+                downstream: Vec::new(),
+            })),
             children: Vec::new(),
         };
         let child = ConstantTestNode {
@@ -843,10 +858,10 @@ mod tests {
                     identifier: "_".to_string(),
                 }),
             }),
-            output_memory: Some(AlphaMemory {
+            output_memory: Some(Rc::new(AlphaMemory {
                 memories: HashSet::new(),
-                downstream: HashSet::new(),
-            }),
+                downstream: Vec::new(),
+            })),
             children: vec![Box::new(child)],
         };
         let mut root = ConstantTestNode {
@@ -861,10 +876,10 @@ mod tests {
                     identifier: "_".to_string(),
                 }),
             }),
-            output_memory: Some(AlphaMemory {
+            output_memory: Some(Rc::new(AlphaMemory {
                 memories: HashSet::new(),
-                downstream: HashSet::new(),
-            }),
+                downstream: Vec::new(),
+            })),
             children: vec![Box::new(child)],
         };
         dbg!(&root);
@@ -908,10 +923,10 @@ mod tests {
                     identifier: "_".to_string(),
                 }),
             }),
-            output_memory: Some(AlphaMemory {
+            output_memory: Some(Rc::new(AlphaMemory {
                 memories: HashSet::new(),
-                downstream: HashSet::new(),
-            }),
+                downstream: Vec::new(),
+            })),
             children: vec![],
         };
         root.add_awme(AbstractWME {
@@ -955,5 +970,15 @@ mod tests {
 
         root.activate(test_wme1.clone(), ActivationMode::Delete);
         dbg!(&root);
+
+        let alpha = root.get_alpha(AbstractWME {
+            ident: Variable {
+                identifier: "x".to_string(),
+            },
+            attr: AbstractAttribute::Literal("yeet".to_string()),
+            value: AbstractValue::Literal(Literal::Number(1)),
+        });
+
+        dbg!(alpha);
     }
 }
