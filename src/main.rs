@@ -98,12 +98,13 @@ struct BetaNode {
 #[derive(Debug, Clone)]
 struct Join {
     test: Option<Vec<AbstractWME>>,
+    right_test: AbstractWME,
     left_parent: Rc<BetaNode>,
     right_parent: Rc<AlphaMemory>,
     downstream: Vec<Rc<RefCell<BetaNode>>>, // A list of shared mutable references to all downstream nodes
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct JoinTable(HashMap<String, JoinTableEntry>);
 
 // Represents all possible values of any symbol in the join table
@@ -218,9 +219,10 @@ impl Join {
     }
 
     // Activates with a new match from the left (cws is a list of NEW table matches)
-    fn activate_left(&mut self, cws: Vec<JoinTable>, aw: AbstractWME, mode: ActivationMode) {
-        let right: HashSet<ConcreteWME> =
-            Rc::try_unwrap(self.right_parent.clone()).unwrap().memories;
+    fn activate_left(&mut self, cws: Vec<JoinTable>, mode: ActivationMode) {
+        let right_parent = Rc::try_unwrap(self.right_parent.clone()).unwrap();
+        let right: HashSet<ConcreteWME> = right_parent.memories;
+        let aw = self.right_test.clone();
         for cw in right {
             self.activate_right(cw, aw.clone(), mode, Some(cws.clone()))
         }
@@ -228,7 +230,17 @@ impl Join {
 }
 
 impl BetaNode {
-    fn activate(&mut self, cws: Vec<JoinTable>, mode: ActivationMode) {}
+    fn activate(&mut self, cws: Vec<JoinTable>, mode: ActivationMode) {
+        for cw in cws.clone() {
+            self.memories.push(cw.clone());
+        }
+        for child in self.downstream.clone() {
+            child.borrow_mut().activate_left(cws.clone(), mode);
+        }
+    }
+    // memories: Vec<JoinTable>,
+    // downstream: Vec<Rc<RefCell<Join>>>,
+    // productions: Vec<Rc<RefCell<Production>>>,
 }
 
 #[derive(Debug)]
