@@ -662,19 +662,19 @@ fn main() {
 
     loop {
         // IO Handling and Stuff:
-        let io = root.get_by_attr(AbstractWME {
-            ident: Variable {
-                identifier: "io".to_string(),
-            },
-            attr: AbstractAttribute::Literal("print".to_string()),
-            value: AbstractValue::Variable(Variable {
-                identifier: "_".to_string(),
-            }),
-        });
-        if let Some(io) = io {
-            let io = io.memories.iter().next().unwrap();
-            dbg!(io);
-        }
+        // let io = root.get_by_attr(AbstractWME {
+        //     ident: Variable {
+        //         identifier: "io".to_string(),
+        //     },
+        //     attr: AbstractAttribute::Literal("print".to_string()),
+        //     value: AbstractValue::Variable(Variable {
+        //         identifier: "_".to_string(),
+        //     }),
+        // });
+        // if let Some(io) = io {
+        //     let io = io.memories.iter().next().unwrap();
+        //     dbg!(io);
+        // }
 
         // Main Loop:
         let mut changes = Vec::new();
