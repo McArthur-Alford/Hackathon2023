@@ -149,7 +149,19 @@ impl ConstantTestNode {
         for child in &mut self.children {
             // This child has the same test as this
             if let Some(test) = child.test.clone() {
-                if test.attr == aw.clone().attr {
+                if test.attr == aw.clone().attr
+                    && !(matches!(test.attr, AbstractAttribute::Variable(x))
+                        && matches!(aw.clone().attr, AbstractAttribute::Variable(y)))
+                {
+                    if matches!(test.value, AbstractValue::Variable(x))
+                        && matches!(child.output_memory, None)
+                    {
+                        child.output_memory = Some(AlphaMemory {
+                            memories: HashSet::new(),
+                        });
+
+                        return;
+                    }
                     // We hit an existing child testing this attr!
                     for child2 in &mut child.children {
                         if let Some(test) = child2.test.clone() {
@@ -158,7 +170,7 @@ impl ConstantTestNode {
                             }
                         }
                     }
-                    self.children.push(Box::new(ConstantTestNode {
+                    child.children.push(Box::new(ConstantTestNode {
                         test: Some(AbstractWME {
                             ident: aw.ident.clone(),
                             attr: aw.attr.clone(),
@@ -391,6 +403,36 @@ mod tests {
             attr: AbstractAttribute::Literal("yeet".to_string()),
             value: AbstractValue::Literal(Literal::Number(1)),
         });
+        root.add_awme(AbstractWME {
+            ident: Variable {
+                identifier: "x".to_string(),
+            },
+            attr: AbstractAttribute::Literal("yeet".to_string()),
+            value: AbstractValue::Literal(Literal::Number(2)),
+        });
+        root.add_awme(AbstractWME {
+            ident: Variable {
+                identifier: "x".to_string(),
+            },
+            attr: AbstractAttribute::Literal("magic".to_string()),
+            value: AbstractValue::Literal(Literal::Number(1)),
+        });
+        root.add_awme(AbstractWME {
+            ident: Variable {
+                identifier: "x".to_string(),
+            },
+            attr: AbstractAttribute::Literal("magic".to_string()),
+            value: AbstractValue::Literal(Literal::Number(2)),
+        });
+        root.add_awme(AbstractWME {
+            ident: Variable {
+                identifier: "x".to_string(),
+            },
+            attr: AbstractAttribute::Literal("magic".to_string()),
+            value: AbstractValue::Variable(Variable {
+                identifier: "y".to_string(),
+            }),
+        });
 
         let test_wme1 = ConcreteWME {
             ident: EntityId(0),
@@ -398,6 +440,11 @@ mod tests {
             value: ConcreteValue::Literal(Literal::Number(1)),
         };
         let test_wme2 = ConcreteWME {
+            ident: EntityId(2),
+            attr: "yeet".to_string(),
+            value: ConcreteValue::Literal(Literal::Number(1)),
+        };
+        let test_wme3 = ConcreteWME {
             ident: EntityId(1),
             attr: "yeet".to_string(),
             value: ConcreteValue::Literal(Literal::Number(2)),
@@ -405,6 +452,7 @@ mod tests {
 
         root.activate(test_wme1);
         root.activate(test_wme2);
+        root.activate(test_wme3);
 
         dbg!(&root);
     }
