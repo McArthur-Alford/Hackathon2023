@@ -109,11 +109,29 @@ struct JoinTable(HashMap<String, JoinTableEntry>);
 // Represents all possible values of any symbol in the join table
 #[derive(Debug, Clone)]
 enum JoinTableEntry {
-    Variable(Variable),
+    Variable(EntityId),
     Literal(Literal),
 }
 
-fn concrete_wme_into_jte(cw: ConcreteWME) {}
+// Turns a concrete wme into a triplet of new join table entries
+// Or returns none if its not possible
+fn concrete_wme_into_jte(cw: ConcreteWME) -> (JoinTableEntry, JoinTableEntry, JoinTableEntry) {
+    let id = cw.ident;
+    let attr = Literal::Text(cw.attr); // Only String (this is nearly useless!)
+    let value: ConcreteValue = cw.value; // Either Literal or EntityId
+    let mut out = None;
+    if let ConcreteValue::Literal(x) = value {
+        out = Some(JoinTableEntry::Literal(x));
+    } else if let ConcreteValue::Variable(x) = value {
+        out = Some(JoinTableEntry::Variable(x));
+    }
+    let out = out.unwrap();
+    (
+        JoinTableEntry::Variable(id),
+        JoinTableEntry::Literal(attr),
+        out,
+    )
+}
 
 impl Join {
     // Activates with a new element from the right
