@@ -107,7 +107,7 @@ struct Join {
 struct JoinTable(HashMap<String, JoinTableEntry>);
 
 // Represents all possible values of any symbol in the join table
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 enum JoinTableEntry {
     Variable(EntityId),
     Literal(Literal),
@@ -133,22 +133,86 @@ fn concrete_wme_into_jte(cw: ConcreteWME) -> (JoinTableEntry, JoinTableEntry, Jo
     )
 }
 
+fn abstract_wme_into_symbols(aw: AbstractWME) -> (Option<String>, Option<String>, Option<String>) {
+    let id = aw.ident;
+    let attr = aw.attr; // Only String (this is nearly useless!)
+    let value = aw.value; // Either Literal or EntityId
+    let out = (
+        Some(id.identifier),
+        if let AbstractAttribute::Variable(x) = attr {
+            Some(x.identifier)
+        } else {
+            None
+        },
+        if let AbstractValue::Variable(x) = value {
+            Some(x.identifier)
+        } else {
+            None
+        },
+    );
+
+    out
+}
+
 impl Join {
     // Activates with a new element from the right
-    fn activate_right(&mut self, cw: ConcreteWME, mode: ActivationMode) {
-        let new_matches: Vec<ConcreteWME> = Vec::new();
-        // Join the cw with every left hand match
-        for left in Rc::try_unwrap(self.left_parent.clone()).unwrap().memories {
-            // Going through each memory in the left parent!
+    fn activate_right(&mut self, cw: ConcreteWME, aw: AbstractWME, mode: ActivationMode) {
+        let jte = concrete_wme_into_jte(cw);
+        let syms = abstract_wme_into_symbols(aw);
+        // We now have each value and symbol in the new entry (exhausting, right??)
+
+        let tables: Vec<JoinTable> = Rc::try_unwrap(self.left_parent.clone()).unwrap().memories;
+        let new_tables = tables
+            .iter()
+            .filter(|table| {
+                let (a, b, c) = (
+                    if let Some(s) = syms.clone().0 {
+                        table.0.get(&s)
+                    } else {
+                        None
+                    },
+                    if let Some(s) = syms.clone().1 {
+                        table.0.get(&s)
+                    } else {
+                        None
+                    },
+                    if let Some(s) = syms.clone().2 {
+                        table.0.get(&s)
+                    } else {
+                        None
+                    },
+                );
+                // Each a,b,c (if it exists) must equal the concrete
+                // If not, its not a perfect match, we reject it
+                *a.unwrap_or(&jte.clone().0) == jte.clone().0
+                    && *b.unwrap_or(&jte.clone().1) == jte.clone().1
+                    && *c.unwrap_or(&jte.clone().2) == jte.clone().2
+            })
+            .map(|table| {
+                let mut table = table.clone();
+                if let Some(s) = syms.clone().0 {
+                    table.0.insert(s, jte.clone().0);
+                };
+                if let Some(s) = syms.clone().1 {
+                    table.0.insert(s, jte.clone().1);
+                };
+                if let Some(s) = syms.clone().2 {
+                    table.0.insert(s, jte.clone().2);
+                };
+                table
+            })
+            .collect::<Vec<JoinTable>>();
+        for child in &self.downstream {
+            child.borrow_mut().activate(tables.clone(), mode);
         }
     }
 
-    // Activates with a new match from the left
-    fn activate_left(&mut self, cws: Vec<ConcreteWME>, mode: ActivationMode) {}
+    // Activates with a new match from the left (cws is a list of NEW table matches)
+    fn activate_left(&mut self, cws: Vec<JoinTable>, mode: ActivationMode) {}
 }
 
 impl BetaNode {
-    fn activate(&mut self, cws: Vec<ConcreteWME>, mode: ActivationMode) {}
+    fn activate(&mut self, cws: Vec<JoinTable>, mode: ActivationMode) {}
 }
 
 #[derive(Debug)]
