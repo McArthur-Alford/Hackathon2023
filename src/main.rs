@@ -339,14 +339,14 @@ fn main() {
             root.push(AlphaNode(HashSet::new(), pattern.clone()));
         }
     }
-    // root.push(AlphaNode(
-    //     HashSet::new(),
-    //     Pattern(
-    //         Symbol::Id("io".to_string()),
-    //         Symbol::Text("print".to_string()),
-    //         Symbol::Id("out".to_string()),
-    //     ),
-    // ));
+    root.push(AlphaNode(
+        HashSet::new(),
+        Pattern(
+            Symbol::Id("io".to_string()),
+            Symbol::Text("print".to_string()),
+            Symbol::Id("out".to_string()),
+        ),
+    ));
     root.push(AlphaNode(
         HashSet::new(),
         Pattern(

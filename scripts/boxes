@@ -1,0 +1,12 @@
+init:
+	<TIME> ^std timekeeper
+	<TIME> ^init true
+	->
+	<box1> ^on you
+
+query_rule:
+	<IO> ^std IO
+	->
+	<IO> ^print yee
+	
+
