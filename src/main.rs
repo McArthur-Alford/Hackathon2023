@@ -214,21 +214,22 @@ impl AlphaNode {
 // Scope maps Symbol ids to values
 // Literals are not included (only for pattern matching)
 // This maps a Symbol::Id to Text
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 struct Scope(HashMap<String, String>);
 
 fn join(mut alphas: Vec<AlphaNode>) -> Vec<Scope> {
     if alphas.len() == 1 {
         let mut maps = Vec::<HashMap<String, String>>::new();
+        let pattern: Pattern = alphas[0].1.clone();
         for wme in alphas[0].0.iter() {
             let mut map = HashMap::new();
-            if let Symbol::Id(id) = wme.1 .0.clone() {
+            if let Symbol::Id(id) = pattern.0.clone() {
                 map.insert(id, wme.0 .0.clone());
             };
-            if let Symbol::Id(id) = wme.1 .1.clone() {
+            if let Symbol::Id(id) = pattern.1.clone() {
                 map.insert(id, wme.0 .1.clone());
             };
-            if let Symbol::Id(id) = wme.1 .2.clone() {
+            if let Symbol::Id(id) = pattern.2.clone() {
                 map.insert(id, wme.0 .2.clone());
             };
             maps.push(map);
@@ -238,10 +239,11 @@ fn join(mut alphas: Vec<AlphaNode>) -> Vec<Scope> {
         let alpha = alphas.pop().unwrap();
         let scopes = join(alphas);
         let mut new_scopes = Vec::new();
+        let pattern: Pattern = alpha.1.clone();
         for wme in alpha.0.iter() {
             'mid: for scope in scopes.clone() {
                 let mut mini_scope: Scope = scope.clone();
-                for (symbol, val) in vec![wme.1 .0.clone(), wme.1 .1.clone(), wme.1 .2.clone()]
+                for (symbol, val) in vec![pattern.0.clone(), pattern.1.clone(), pattern.2.clone()]
                     .iter()
                     .zip(vec![wme.0 .0.clone(), wme.0 .1.clone(), wme.0 .2.clone()])
                 {
@@ -334,27 +336,78 @@ fn main() {
             root.push(AlphaNode(HashSet::new(), pattern.clone()));
         }
     }
-
+    root.push(AlphaNode(
+        HashSet::new(),
+        Pattern(
+            Symbol::Id("io".to_string()),
+            Symbol::Text("print".to_string()),
+            Symbol::Id("out".to_string()),
+        ),
+    ));
     let mut fresh_id: usize = 10;
 
-    dbg!(&root);
-
-    activate(&mut root, WME::from("time", "std", "time"));
+    activate(&mut root, WME::from("time", "std", "timekeeper"));
     activate(&mut root, WME::from("time", "init", "true"));
     activate(&mut root, WME::from("io", "std", "IO"));
     activate(&mut root, WME::from("io", "print", ""));
     activate(&mut root, WME::from("io", "read", ""));
 
-    dbg!(&root);
-
-    panic!();
-
     // Main Loop
     loop {
         for prod in &out {
-            dbg!(prod);
+            let mut alphas = Vec::new();
+            for pattern in prod.0.clone() {
+                if let Some(alpha) = find_alpha(&mut root, pattern) {
+                    alphas.push(alpha.clone());
+                }
+            }
+            let joins = join(alphas.clone());
+            let mut changes = Vec::new();
+            for join in joins {
+                for rhs in prod.1.clone() {
+                    let mut memory = Memory(fresh_id.to_string(), "".to_string(), "".to_string());
+                    if let Symbol::Id(id) = rhs.0.clone() {
+                        if let Some(val) = join.0.get(&id) {
+                            memory.0 = val.clone();
+                        }
+                    };
+                    if let Symbol::Id(id) = rhs.1.clone() {
+                        if let Some(val) = join.0.get(&id) {
+                            memory.0 = val.clone();
+                        }
+                    };
+                    if let Symbol::Text(text) = rhs.1.clone() {
+                        memory.1 = text;
+                    }
+                    if let Symbol::Id(id) = rhs.2.clone() {
+                        if let Some(val) = join.0.get(&id) {
+                            memory.0 = val.clone();
+                        }
+                    };
+                    if let Symbol::Text(text) = rhs.2.clone() {
+                        memory.2 = text;
+                    }
+                    changes.push(memory);
+                }
+            }
+            for change in changes {
+                activate(&mut root, WME::from(&change.0, &change.1, &change.2));
+            }
+
+            // Do IO?
+            let io = find_alpha(
+                &mut root,
+                Pattern(
+                    Symbol::Id("IO".to_string()),
+                    Symbol::Text("print".to_string()),
+                    Symbol::Id("_".to_string()),
+                ),
+            );
+            dbg!(&io);
+            if let Some(io) = &io {
+                println!("{}", io.0.iter().next().unwrap().0 .2);
+            }
+            // dbg!(root.clone());
         }
     }
-
-    dbg!(out);
 }
