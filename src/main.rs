@@ -402,60 +402,60 @@ fn main() {
             for change in changes {
                 activate(&mut root, WME::from(&change.0, &change.1, &change.2));
             }
-
-            // Do IO?
-            let io = find_alpha(
-                &mut root,
-                Pattern(
-                    Symbol::Id("IO".to_string()),
-                    Symbol::Text("print".to_string()),
-                    Symbol::Id("_".to_string()),
-                ),
-            );
-            if let Some(io) = &io {
-                let out = io.0.iter().next().unwrap().0 .2.clone();
-                if out != "" {
-                    println!("{}", out);
-                }
-            };
-
-            let read = find_alpha(
-                &mut root,
-                Pattern(
-                    Symbol::Id("IO".to_string()),
-                    Symbol::Text("doread".to_string()),
-                    Symbol::Text("true".to_string()),
-                ),
-            );
-            if let Some(read) = &read {
-                dbg!(&read);
-                if read.0.len() != 0 {
-                    use std::io::{stdin, stdout, Write};
-                    let mut s = String::new();
-                    print!("Please enter some text: ");
-                    let _ = stdout().flush();
-                    stdin()
-                        .read_line(&mut s)
-                        .expect("Did not enter a correct string");
-                    let s = s.trim();
-                    activate(&mut root, WME::from("io", "read", &s));
-                    activate(&mut root, WME::from("io", "doread", "false"));
-                }
-            }
-
-            let timekeeper = find_alpha(
-                &mut root,
-                Pattern(
-                    Symbol::Id("TIME".to_string()),
-                    Symbol::Text("init".to_string()),
-                    Symbol::Text("true".to_string()),
-                ),
-            );
-            if let Some(timekeeper) = &timekeeper {
-                activate(&mut root, WME::from("time", "init", "false"));
-            }
-            // dbg!(&io);
-            // dbg!(root.clone());
         }
+        // Do IO?
+        let io = find_alpha(
+            &mut root,
+            Pattern(
+                Symbol::Id("IO".to_string()),
+                Symbol::Text("print".to_string()),
+                Symbol::Id("_".to_string()),
+            ),
+        );
+        if let Some(io) = &io {
+            let out = io.0.iter().next().unwrap().0 .2.clone();
+            if out != "" {
+                println!("{}", out);
+            }
+        };
+
+        let read = find_alpha(
+            &mut root,
+            Pattern(
+                Symbol::Id("IO".to_string()),
+                Symbol::Text("doread".to_string()),
+                Symbol::Text("true".to_string()),
+            ),
+        );
+        // println!("----------");
+        if let Some(read) = &read {
+            // dbg!(&read);
+            if read.0.len() != 0 {
+                use std::io::{stdin, stdout, Write};
+                let mut s = String::new();
+                print!("Please enter some text: ");
+                let _ = stdout().flush();
+                stdin()
+                    .read_line(&mut s)
+                    .expect("Did not enter a correct string");
+                let s = s.trim();
+                activate(&mut root, WME::from("io", "read", &s));
+                activate(&mut root, WME::from("io", "doread", "false"));
+            }
+        }
+
+        let timekeeper = find_alpha(
+            &mut root,
+            Pattern(
+                Symbol::Id("TIME".to_string()),
+                Symbol::Text("init".to_string()),
+                Symbol::Text("true".to_string()),
+            ),
+        );
+        if let Some(timekeeper) = &timekeeper {
+            activate(&mut root, WME::from("time", "init", "false"));
+        }
+        // dbg!(&io);
+        // dbg!(root.clone());
     }
 }
