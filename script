@@ -3,7 +3,6 @@ init:
     <TIME> ^init true
     ->
     <a> ^state flip
-    <TIME> ^init false
 
 flop:
     <a> ^state flip

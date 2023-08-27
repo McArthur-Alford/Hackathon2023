@@ -336,14 +336,14 @@ fn main() {
             root.push(AlphaNode(HashSet::new(), pattern.clone()));
         }
     }
-    root.push(AlphaNode(
-        HashSet::new(),
-        Pattern(
-            Symbol::Id("io".to_string()),
-            Symbol::Text("print".to_string()),
-            Symbol::Id("out".to_string()),
-        ),
-    ));
+    // root.push(AlphaNode(
+    //     HashSet::new(),
+    //     Pattern(
+    //         Symbol::Id("io".to_string()),
+    //         Symbol::Text("print".to_string()),
+    //         Symbol::Id("out".to_string()),
+    //     ),
+    // ));
     root.push(AlphaNode(
         HashSet::new(),
         Pattern(
@@ -413,7 +413,10 @@ fn main() {
                 ),
             );
             if let Some(io) = &io {
-                println!("{}", io.0.iter().next().unwrap().0 .2);
+                let out = io.0.iter().next().unwrap().0 .2.clone();
+                if out != "" {
+                    println!("{}", out);
+                }
             };
 
             let read = find_alpha(
@@ -425,13 +428,31 @@ fn main() {
                 ),
             );
             if let Some(read) = &read {
+                dbg!(&read);
                 if read.0.len() != 0 {
-                    let mut input = String::new();
-                    std::io::stdin().read_line(&mut input);
-                    let mut input = input.trim();
-                    activate(&mut root, WME::from("io", "read", &input));
+                    use std::io::{stdin, stdout, Write};
+                    let mut s = String::new();
+                    print!("Please enter some text: ");
+                    let _ = stdout().flush();
+                    stdin()
+                        .read_line(&mut s)
+                        .expect("Did not enter a correct string");
+                    let s = s.trim();
+                    activate(&mut root, WME::from("io", "read", &s));
                     activate(&mut root, WME::from("io", "doread", "false"));
                 }
+            }
+
+            let timekeeper = find_alpha(
+                &mut root,
+                Pattern(
+                    Symbol::Id("TIME".to_string()),
+                    Symbol::Text("init".to_string()),
+                    Symbol::Text("true".to_string()),
+                ),
+            );
+            if let Some(timekeeper) = &timekeeper {
+                activate(&mut root, WME::from("time", "init", "false"));
             }
             // dbg!(&io);
             // dbg!(root.clone());
