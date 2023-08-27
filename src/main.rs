@@ -10,9 +10,116 @@ use std::rc::{Rc, Weak};
 
 #[derive(Parser)]
 #[grammar = "grammar.pest"]
-pub struct CSVParser;
+struct CSVParser;
 
-#[derive(PartialEq, Eq, Hash, Clone)]
+fn process_variable(pair: Pair<Rule>) -> Symbol {
+    let mut inner: Pairs<Rule> = pair.into_inner(); // we know this is a variable
+    let contents = inner.next().unwrap();
+    match contents.clone().as_rule() {
+        Rule::generic => Symbol::Id(
+            contents
+                .into_inner()
+                .next()
+                .unwrap()
+                .as_span()
+                .as_str()
+                .to_string(),
+        ),
+        _ => panic!(),
+    }
+}
+
+fn process_attr(pair: Pair<Rule>) -> Symbol {
+    let mut inner: Pairs<Rule> = pair.into_inner();
+    let contents = inner.next().unwrap();
+    match contents.clone().as_rule() {
+        Rule::generic => Symbol::Id(
+            contents
+                .into_inner()
+                .next()
+                .unwrap()
+                .as_span()
+                .as_str()
+                .to_string(),
+        ),
+        _ => Symbol::Text(contents.as_span().as_str().to_string()),
+    }
+    // AbstractAttribute::Literal("WOO".to_string())
+}
+
+fn process_value(pair: Pair<Rule>) -> Symbol {
+    let mut inner = pair.into_inner();
+    let contents = inner.next().unwrap();
+    match contents.clone().as_rule() {
+        Rule::constant => {
+            let mut inner = contents.into_inner();
+            let contents = inner.next().unwrap();
+            match contents.clone().as_rule() {
+                Rule::string => {
+                    let string = contents.as_span().as_str().to_string();
+                    let mut chars = string.chars();
+                    chars.next();
+                    chars.next_back();
+                    let string = chars.as_str().to_string();
+                    (Symbol::Text(string))
+                }
+                _ => {
+                    panic!()
+                }
+            }
+        }
+        Rule::var => (process_variable(contents)),
+        _ => {
+            panic!()
+        }
+    }
+}
+
+fn process_wme(pair: Pair<Rule>) -> Pattern {
+    // "Safe" to assume pair IS a WME
+    let mut inner: Pairs<Rule> = pair.into_inner();
+    let ident = process_variable(inner.next().unwrap());
+    let attr = process_attr(inner.next().unwrap());
+    let value = process_value(inner.next().unwrap());
+
+    Pattern(ident, attr, value)
+}
+
+fn process_block(pair: Pair<Rule>) -> Vec<Pattern> {
+    // "Safe" to assume pair IS a block
+    let mut output = Vec::new();
+    let mut inner: Pairs<Rule> = pair.into_inner();
+    for elem in inner {
+        output.push(process_wme(elem));
+    }
+    output
+}
+
+fn process_production(pair: Pair<Rule>) -> Prod {
+    // "Safe" to assume pair IS a production
+    let mut inner: Pairs<Rule> = pair.into_inner();
+    let id = inner.next().unwrap();
+    let lhs = inner.next().unwrap();
+    let rhs = inner.next().unwrap();
+    Prod(process_block(lhs), process_block(rhs))
+}
+
+#[derive(Debug)]
+struct Prod(Vec<Pattern>, Vec<Pattern>);
+
+fn process_file(pair: Pair<Rule>) -> Vec<Prod> {
+    // "Safe" to assume pair IS a file
+    let mut output = Vec::new();
+    for prod in pair.into_inner() {
+        if prod.as_rule() == Rule::prod {
+            // Valid production,
+            output.push(process_production(prod));
+        }
+    }
+    output
+}
+
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 enum Symbol {
     Id(String),
     Text(String),
@@ -37,11 +144,11 @@ impl Symbol {
 }
 
 // Id, Attr, Text
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 struct Memory(String, String, String);
 
 // Symbol is generics OR literals for matching
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 struct Pattern(Symbol, Symbol, Symbol);
 
 impl Pattern {
@@ -57,11 +164,11 @@ impl Pattern {
 }
 
 // WME is a memory and its pattern
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 struct WME(Memory, Pattern);
 
 // Alpha Store, universal pattern for all WMEs
-#[derive(PartialEq, Eq, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 struct AlphaNode(HashSet<WME>);
 
 impl AlphaNode {
@@ -76,15 +183,19 @@ impl AlphaNode {
 #[derive(PartialEq, Eq, Clone)]
 struct Scope(HashMap<String, String>);
 
+#[derive(PartialEq, Eq, Clone, Debug)]
 struct Node {
-    guard: Pattern,
+    guard: Option<Pattern>,
     children: Vec<Box<Node>>,
     alpha: AlphaNode,
 }
 
 impl Node {
     fn activate(&mut self, wme: WME) {
-        let pmr = self.guard.pattern_match(&wme.1);
+        let pmr = (false, false, false);
+        if let Some(guard) = self.guard.clone() {
+            let pmr = guard.pattern_match(&wme.1);
+        }
         if pmr == (true, true, true) {
             self.alpha.activate(wme.clone());
         } else {
@@ -112,31 +223,34 @@ impl Node {
     }
 
     fn add_pattern(&mut self, pattern: Pattern) -> bool {
-        let pmr = self.guard.pattern_match(&pattern);
-        match pmr {
-            (true, true, true) => {
-                return true;
-            }
-            (true, true, false) => {
-                for child in &mut self.children {
-                    if child.add_pattern(pattern.clone()) {
-                        return true;
-                    }
-                }
-                self.children.push(Box::new(Node {
-                    guard: pattern,
-                    children: Vec::new(),
-                    alpha: AlphaNode(HashSet::new()),
-                }));
-                return true;
-            }
-            _ => {
-                for child in &mut self.children {
-                    child.add_pattern(pattern.clone());
-                }
+        println!(">>>>>>>>>>>>>>>>>>>>");
+        dbg!(&pattern);
+        dbg!(&self.guard);
+        let pmr = (false, false, false);
+        if let Some(guard) = self.guard.clone() {
+            let pmr = guard.pattern_match(&pattern);
+        }
+        dbg!(&pmr);
+        if pmr == (true, true, true) {
+            // Already exists!
+            return true;
+        }
+        for child in &mut self.children {
+            if child.add_pattern(pattern.clone()) {
+                // A child already has this!
                 return true;
             }
         }
+        // None of our children had it.
+        if pmr == (true, true, false) {
+            self.children.push(Box::new(Node {
+                guard: Some(pattern),
+                children: Vec::new(),
+                alpha: AlphaNode(HashSet::new()),
+            }))
+        }
+        if pmr == (true, false, false) {}
+        return false;
     }
 }
 
@@ -186,10 +300,6 @@ fn join(mut alphas: Vec<AlphaNode>) -> Vec<Scope> {
     }
 }
 
-fn process_file(f: Pair<Rule>) -> () {
-    ()
-}
-
 fn main() {
     let unparsed_file = fs::read_to_string("script").expect("cannot read file");
 
@@ -199,4 +309,31 @@ fn main() {
         .unwrap();
 
     let out = process_file(file);
+    let mut root = Node {
+        guard: None,
+        children: Vec::new(),
+        alpha: AlphaNode(HashSet::new()),
+    };
+
+    dbg!(&root);
+
+    for prod in &out {
+        for pattern in prod.0.clone() {
+            dbg!(&pattern);
+            root.add_pattern(pattern);
+        }
+    }
+
+    dbg!(&root);
+
+    panic!();
+
+    // Main Loop
+    loop {
+        for prod in &out {
+            dbg!(prod);
+        }
+    }
+
+    dbg!(out);
 }

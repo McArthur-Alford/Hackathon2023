@@ -1,8 +1,12 @@
 init_rule:
-    <TIME> ^std 'timekeeper'
-    <TIME> ^init True
-    <IO> ^std 'io'
+    <TIME> ^std timekeeper
+    <TIME> ^init true
     ->
-    <box1> ^id 'box1'
-    <box1> ^colour 'red'
-    <IO> ^print 'yew'
+    <box1> ^id box1
+    <box1> ^colour red
+
+print_rule:
+    <IO> ^std IO
+    <IO> ^read <read>
+    ->
+    <IO> ^print <read>
