@@ -7,23 +7,16 @@ init:
 
 flop:
     <a> ^state flip
-    <IO> ^std IO
     ->
     <a> ^state flop
 
 flip:
     <a> ^state flop
-    <IO> ^std IO
     ->
     <a> ^state flip
 
-read_reply:
+printer:
     <IO> ^std IO
-    <IO> ^read <a>
+    <a> ^state <state>
     ->
-    <IO> ^print <a>
-
-read_request:
-    <IO> ^std IO
-    ->
-    <IO> ^doread true
+    <IO> ^print <state>

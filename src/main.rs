@@ -344,12 +344,21 @@ fn main() {
             Symbol::Id("out".to_string()),
         ),
     ));
+    root.push(AlphaNode(
+        HashSet::new(),
+        Pattern(
+            Symbol::Id("io".to_string()),
+            Symbol::Text("doread".to_string()),
+            Symbol::Text("true".to_string()),
+        ),
+    ));
     let mut fresh_id: usize = 10;
 
     activate(&mut root, WME::from("time", "std", "timekeeper"));
     activate(&mut root, WME::from("time", "init", "true"));
     activate(&mut root, WME::from("io", "std", "IO"));
     activate(&mut root, WME::from("io", "print", ""));
+    activate(&mut root, WME::from("io", "doread", ""));
     activate(&mut root, WME::from("io", "read", ""));
 
     // Main Loop
@@ -373,7 +382,7 @@ fn main() {
                     };
                     if let Symbol::Id(id) = rhs.1.clone() {
                         if let Some(val) = join.0.get(&id) {
-                            memory.0 = val.clone();
+                            memory.1 = val.clone();
                         }
                     };
                     if let Symbol::Text(text) = rhs.1.clone() {
@@ -381,7 +390,7 @@ fn main() {
                     }
                     if let Symbol::Id(id) = rhs.2.clone() {
                         if let Some(val) = join.0.get(&id) {
-                            memory.0 = val.clone();
+                            memory.2 = val.clone();
                         }
                     };
                     if let Symbol::Text(text) = rhs.2.clone() {
@@ -403,10 +412,28 @@ fn main() {
                     Symbol::Id("_".to_string()),
                 ),
             );
-            dbg!(&io);
             if let Some(io) = &io {
                 println!("{}", io.0.iter().next().unwrap().0 .2);
+            };
+
+            let read = find_alpha(
+                &mut root,
+                Pattern(
+                    Symbol::Id("IO".to_string()),
+                    Symbol::Text("doread".to_string()),
+                    Symbol::Text("true".to_string()),
+                ),
+            );
+            if let Some(read) = &read {
+                if read.0.len() != 0 {
+                    let mut input = String::new();
+                    std::io::stdin().read_line(&mut input);
+                    let mut input = input.trim();
+                    activate(&mut root, WME::from("io", "read", &input));
+                    activate(&mut root, WME::from("io", "doread", "false"));
+                }
             }
+            // dbg!(&io);
             // dbg!(root.clone());
         }
     }
