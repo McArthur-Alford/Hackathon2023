@@ -363,6 +363,7 @@ fn main() {
 
     // Main Loop
     loop {
+        let mut changes = Vec::new();
         for prod in &out {
             let mut alphas = Vec::new();
             for pattern in prod.0.clone() {
@@ -371,7 +372,6 @@ fn main() {
                 }
             }
             let joins = join(alphas.clone());
-            let mut changes = Vec::new();
             for join in joins {
                 for rhs in prod.1.clone() {
                     let mut memory = Memory(fresh_id.to_string(), "".to_string(), "".to_string());
@@ -399,9 +399,9 @@ fn main() {
                     changes.push(memory);
                 }
             }
-            for change in changes {
-                activate(&mut root, WME::from(&change.0, &change.1, &change.2));
-            }
+        }
+        for change in changes {
+            activate(&mut root, WME::from(&change.0, &change.1, &change.2));
         }
         // Do IO?
         let io = find_alpha(
