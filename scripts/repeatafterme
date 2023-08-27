@@ -1,0 +1,10 @@
+reader:
+	<IO> ^std IO
+	->
+	<IO> ^doread true
+
+printer:
+	<IO> ^std IO
+	<IO> ^read <a>
+	->
+	<IO> ^print <a>

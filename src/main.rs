@@ -5,6 +5,7 @@ use pest::{
 use pest_derive::Parser;
 use std::cell::{Cell, RefCell};
 use std::collections::{HashMap, HashSet};
+use std::env;
 use std::fs;
 use std::rc::{Rc, Weak};
 
@@ -305,7 +306,9 @@ fn activate(alphas: &mut Vec<AlphaNode>, element: WME) {
 }
 
 fn main() {
-    let unparsed_file = fs::read_to_string("script").expect("cannot read file");
+    let args: Vec<String> = env::args().collect();
+
+    let unparsed_file = fs::read_to_string(args[1].clone()).expect("cannot read file");
 
     let file = CSVParser::parse(Rule::file, &unparsed_file)
         .expect("Unsuccessful parse")

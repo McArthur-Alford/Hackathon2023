@@ -1,0 +1,21 @@
+init:
+    <TIME> ^std timekeeper
+    <TIME> ^init true
+    ->
+    <a> ^state flip
+
+flop:
+    <a> ^state flip
+    ->
+    <a> ^state flop
+
+flip:
+    <a> ^state flop
+    ->
+    <a> ^state flip
+
+printer:
+    <a> ^state <b>
+    <IO> ^std IO
+    ->
+    <IO> ^print <b>
