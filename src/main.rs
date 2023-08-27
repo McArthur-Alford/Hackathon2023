@@ -58,8 +58,8 @@ fn process_value(pair: Pair<Rule>) -> Symbol {
                 Rule::string => {
                     let string = contents.as_span().as_str().to_string();
                     let mut chars = string.chars();
-                    chars.next();
-                    chars.next_back();
+                    // chars.next();
+                    // chars.next_back();
                     let string = chars.as_str().to_string();
                     (Symbol::Text(string))
                 }
@@ -126,6 +126,10 @@ enum Symbol {
 }
 
 impl Symbol {
+    fn blank() -> Self {
+        Symbol::Id("_".to_string())
+    }
+
     fn symbol_eq(&self, other: &Self) -> bool {
         if let Symbol::Text(str) = self {
             if let Symbol::Text(str2) = other {
@@ -161,15 +165,45 @@ impl Pattern {
         );
         out
     }
+
+    fn wme_match(&self, other: WME) -> (bool, bool, bool) {
+        // Match against the concrete where its not variables
+        (
+            if let Symbol::Text(t) = self.0.clone() {
+                t == other.0 .0
+            } else {
+                true
+            },
+            if let Symbol::Text(t) = self.1.clone() {
+                t == other.0 .1
+            } else {
+                true
+            },
+            if let Symbol::Text(t) = self.2.clone() {
+                t == other.0 .2
+            } else {
+                true
+            },
+        )
+    }
 }
 
 // WME is a memory and its pattern
 #[derive(PartialEq, Eq, Hash, Clone, Debug)]
 struct WME(Memory, Pattern);
 
+impl WME {
+    fn from(a: &str, b: &str, c: &str) -> WME {
+        WME(
+            Memory(a.to_string(), b.to_string(), c.to_string()),
+            Pattern(Symbol::blank(), Symbol::blank(), Symbol::blank()),
+        )
+    }
+}
+
 // Alpha Store, universal pattern for all WMEs
 #[derive(PartialEq, Eq, Clone, Debug)]
-struct AlphaNode(HashSet<WME>);
+struct AlphaNode(HashSet<WME>, Pattern);
 
 impl AlphaNode {
     fn activate(&mut self, wme: WME) {
@@ -182,77 +216,6 @@ impl AlphaNode {
 // This maps a Symbol::Id to Text
 #[derive(PartialEq, Eq, Clone)]
 struct Scope(HashMap<String, String>);
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-struct Node {
-    guard: Option<Pattern>,
-    children: Vec<Box<Node>>,
-    alpha: AlphaNode,
-}
-
-impl Node {
-    fn activate(&mut self, wme: WME) {
-        let pmr = (false, false, false);
-        if let Some(guard) = self.guard.clone() {
-            let pmr = guard.pattern_match(&wme.1);
-        }
-        if pmr == (true, true, true) {
-            self.alpha.activate(wme.clone());
-        } else {
-            for child in &mut self.children {
-                child.activate(wme.clone());
-            }
-        }
-    }
-
-    fn find_alpha(&mut self, pattern: Pattern) -> Option<AlphaNode> {
-        for elem in self.alpha.0.iter() {
-            if elem.1.pattern_match(&pattern) == (true, true, true) {
-                return Some(self.alpha.clone());
-            } else {
-                break;
-            }
-        }
-        for child in &mut self.children {
-            let out = child.find_alpha(pattern.clone());
-            if out != None {
-                return out;
-            }
-        }
-        None
-    }
-
-    fn add_pattern(&mut self, pattern: Pattern) -> bool {
-        println!(">>>>>>>>>>>>>>>>>>>>");
-        dbg!(&pattern);
-        dbg!(&self.guard);
-        let pmr = (false, false, false);
-        if let Some(guard) = self.guard.clone() {
-            let pmr = guard.pattern_match(&pattern);
-        }
-        dbg!(&pmr);
-        if pmr == (true, true, true) {
-            // Already exists!
-            return true;
-        }
-        for child in &mut self.children {
-            if child.add_pattern(pattern.clone()) {
-                // A child already has this!
-                return true;
-            }
-        }
-        // None of our children had it.
-        if pmr == (true, true, false) {
-            self.children.push(Box::new(Node {
-                guard: Some(pattern),
-                children: Vec::new(),
-                alpha: AlphaNode(HashSet::new()),
-            }))
-        }
-        if pmr == (true, false, false) {}
-        return false;
-    }
-}
 
 fn join(mut alphas: Vec<AlphaNode>) -> Vec<Scope> {
     if alphas.len() == 1 {
@@ -300,6 +263,45 @@ fn join(mut alphas: Vec<AlphaNode>) -> Vec<Scope> {
     }
 }
 
+fn find_alpha(alphas: &mut Vec<AlphaNode>, pattern: Pattern) -> Option<&mut AlphaNode> {
+    for alpha in alphas {
+        if alpha.1.pattern_match(&pattern) == (true, true, true) {
+            return Some(alpha);
+        }
+    }
+    return None;
+}
+
+fn activate(alphas: &mut Vec<AlphaNode>, element: WME) {
+    // Doesnt already exist!
+    let mut nohit = true;
+
+    // If this already exists (id and attr) with a different value, clear it
+    for alpha in &mut *alphas {
+        if alpha.1.wme_match(element.clone()) == (true, true, false)
+            || alpha.1.wme_match(element.clone()) == (true, true, true)
+        {
+            // We are in a WME that COULD store this same attribute
+            // Thus, we want to nuke it
+            alpha.0 = alpha
+                .0
+                .iter()
+                .filter(|&e| !(e.0 .0 == element.0 .0 && e.0 .1 == element.0 .1))
+                .cloned()
+                .collect();
+        }
+    }
+
+    for alpha in alphas {
+        if alpha.1.wme_match(element.clone()) == (true, true, true) {
+            alpha.0.insert(element.clone());
+            nohit = false;
+        }
+    }
+    // Add a new alpha memory, this is clearly new!
+    if nohit {}
+}
+
 fn main() {
     let unparsed_file = fs::read_to_string("script").expect("cannot read file");
 
@@ -309,20 +311,39 @@ fn main() {
         .unwrap();
 
     let out = process_file(file);
-    let mut root = Node {
-        guard: None,
-        children: Vec::new(),
-        alpha: AlphaNode(HashSet::new()),
-    };
+    let mut root = Vec::<AlphaNode>::new();
+
+    // Ensure all the alpha nodes exist!
+    for prod in &out {
+        'mid: for pattern in prod.0.clone() {
+            for alpha in &root {
+                if alpha.1.pattern_match(&pattern) == (true, true, true) {
+                    continue 'mid;
+                }
+            }
+            // Doesnt already exist!
+            root.push(AlphaNode(HashSet::new(), pattern.clone()));
+        }
+        'mid: for pattern in prod.1.clone() {
+            for alpha in &root {
+                if alpha.1.pattern_match(&pattern) == (true, true, true) {
+                    continue 'mid;
+                }
+            }
+            // Doesnt already exist!
+            root.push(AlphaNode(HashSet::new(), pattern.clone()));
+        }
+    }
+
+    let mut fresh_id: usize = 10;
 
     dbg!(&root);
 
-    for prod in &out {
-        for pattern in prod.0.clone() {
-            dbg!(&pattern);
-            root.add_pattern(pattern);
-        }
-    }
+    activate(&mut root, WME::from("time", "std", "time"));
+    activate(&mut root, WME::from("time", "init", "true"));
+    activate(&mut root, WME::from("io", "std", "IO"));
+    activate(&mut root, WME::from("io", "print", ""));
+    activate(&mut root, WME::from("io", "read", ""));
 
     dbg!(&root);
 

@@ -8,5 +8,7 @@ init_rule:
 print_rule:
     <IO> ^std IO
     <IO> ^read <read>
+    <TIME> ^std timekeeper
+    <TIME> ^init false
     ->
     <IO> ^print <read>

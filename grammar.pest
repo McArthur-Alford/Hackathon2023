@@ -7,7 +7,7 @@ bool = { false | true }
 comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
 whitespace = _{ comment | " " | "\t" }
 char = _{ ASCII_ALPHA | digit | whitespace | ":" | "!" | "." }
-string = {char+}  
+string = { char+ }
 number = { digit+ }
 
 // Constants and Identifiers:
